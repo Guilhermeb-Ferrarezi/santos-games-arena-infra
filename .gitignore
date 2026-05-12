@@ -1,0 +1,4 @@
+.env
+dotnet-primary-api
+node_modules
+dist

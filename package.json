@@ -1,0 +1,19 @@
+{
+  "name": "@santos-games/infra",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "dev:auth-api": "bun run --cwd apps/auth-api dev",
+    "dev:auth-web": "bun run --cwd apps/auth-web dev",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.1",
+    "typescript": "^5.9.3"
+  }
+}

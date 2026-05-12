@@ -1,0 +1,8 @@
+.env
+.git
+node_modules
+dist
+apps/*/dist
+apps/*/node_modules
+packages/*/node_modules
+dotnet-primary-api
