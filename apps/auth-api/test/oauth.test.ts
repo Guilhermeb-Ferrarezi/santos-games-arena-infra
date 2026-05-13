@@ -195,8 +195,13 @@ describe("oauth routes", () => {
       url: `/api/auth/oauth/google/callback?code=code-1&state=${encodeURIComponent(String(state))}`
     });
 
+    const loginUrl = new URL(String(response.headers.location));
+
     expect(response.statusCode).toBe(302);
-    expect(response.headers.location).toBe("https://auth.santos-games.com/");
+    expect(loginUrl.pathname).toBe("/");
+    expect(loginUrl.searchParams.get("toast")).toContain(
+      "Nenhuma conta vinculada ao Google"
+    );
 
     await server.close();
   });

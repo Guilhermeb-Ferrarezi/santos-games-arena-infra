@@ -157,7 +157,12 @@ export function registerOAuthRoutes(
         return reply.redirect(buildPasswordSetupUrl(env, oauthState.returnTo, profile));
       }
 
-      return reply.redirect(buildLoginUrl(env));
+      return reply.redirect(
+        buildLoginUrl(
+          env,
+          `Nenhuma conta vinculada ao ${providerLabel(provider)}. Use o cadastro para criar uma conta.`
+        )
+      );
     }
 
     if (!user.isActive) {
