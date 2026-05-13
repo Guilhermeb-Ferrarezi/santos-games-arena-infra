@@ -28,7 +28,7 @@ Current estimate: 97%.
 - `External_Auth_Account` migration applied to the configured database with `dotnet ef database update`.
 - OpenAPI JSON and Swagger UI.
 - Dockerfile for `auth-api`.
-- Root `docker-compose.yml` with auth-api, Postgres and Redis.
+- Root `docker-compose.yml` with sga-auth-api, Postgres and Redis.
 - Unit tests for env, health, dependencies, session, session storage, login, OAuth start, OpenAPI and shared Postgres.
 
 ## Not Done

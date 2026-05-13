@@ -47,12 +47,12 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
 
   server.get("/", async (): Promise<AuthHealthResponse> => ({
     status: "ok",
-    service: "auth-api"
+    service: "sga-auth-api"
   }));
 
   server.get(`${API_PREFIX}/health`, async (): Promise<AuthHealthResponse> => ({
     status: "ok",
-    service: "auth-api"
+    service: "sga-auth-api"
   }));
 
   if (env?.AUTH_COOKIE_NAME && env.JWT_SECRET && env.NODE_ENV) {

@@ -7,7 +7,7 @@ Este projeto usa um tunnel gerenciado pela Cloudflare, executado pelo container 
 No `docker-compose.yml`, os servicos internos sao:
 
 - Auth Web: `http://auth-web:80`
-- Auth API under `/api`: proxied by `auth-web` to `http://auth-api:3001`
+- Auth API under `/api`: proxied by `auth-web` to `http://sga-auth-api:3001`
 
 ## Variaveis
 
