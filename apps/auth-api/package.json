@@ -15,6 +15,7 @@
     "@fastify/swagger-ui": "^5.2.3",
     "@santos-games/auth-contracts": "workspace:*",
     "@santos-games/env": "workspace:*",
+    "@santos-games/logs": "workspace:*",
     "@santos-games/postgres": "workspace:*",
     "@santos-games/redis": "workspace:*",
     "drizzle-orm": "^0.44.7",

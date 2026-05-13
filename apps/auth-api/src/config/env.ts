@@ -20,7 +20,12 @@ const authApiEnvSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().trim().optional(),
   DISCORD_CLIENT_ID: z.string().trim().optional(),
   DISCORD_CLIENT_SECRET: z.string().trim().optional(),
-  STEAM_API_KEY: z.string().trim().optional()
+  STEAM_API_KEY: z.string().trim().optional(),
+  LOGS_MONGO_URL: z.string().trim().url().optional(),
+  LOGS_MONGO_DB_NAME: z.string().trim().min(1).default("logs"),
+  LOGS_HTTP_COLLECTION: z.string().trim().min(1).default("sga_auth_api_logs"),
+  LOGS_ROUTE_BLACKLIST: commaSeparatedList,
+  LOGS_GET_ROUTE_BLACKLIST: commaSeparatedList
 });
 
 export type AuthApiEnv = z.infer<typeof authApiEnvSchema>;

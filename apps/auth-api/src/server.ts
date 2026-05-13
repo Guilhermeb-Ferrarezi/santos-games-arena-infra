@@ -2,6 +2,7 @@ import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import type { AuthHealthResponse } from "@santos-games/auth-contracts";
 import Fastify from "fastify";
+import { registerMongoHttpLogging } from "@santos-games/logs";
 
 import type { AuthApiEnv } from "./config/env";
 import { checkDependencies, type DependencyPingers } from "./infra/dependencies";
@@ -40,6 +41,28 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
     origin: env?.CORS_ORIGINS?.length ? env.CORS_ORIGINS : true,
     credentials: true
   });
+
+  if (env?.LOGS_MONGO_URL) {
+    const routeBlacklist = [
+      "/api/auth/session",
+      "/api/health",
+      "/api/health/dependencies",
+      ...(env.LOGS_ROUTE_BLACKLIST ?? [])
+    ];
+    const getRouteBlacklist = [
+      "/api/health",
+      "/api/health/dependencies",
+      ...(env.LOGS_GET_ROUTE_BLACKLIST ?? [])
+    ];
+
+    registerMongoHttpLogging(server, {
+      mongoUrl: env.LOGS_MONGO_URL,
+      dbName: env.LOGS_MONGO_DB_NAME,
+      collectionName: env.LOGS_HTTP_COLLECTION,
+      routeBlacklist,
+      getRouteBlacklist
+    });
+  }
 
   server.register(registerOpenApi, {
     prefix: API_PREFIX
