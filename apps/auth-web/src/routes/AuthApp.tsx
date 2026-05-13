@@ -254,7 +254,9 @@ export function AuthApp() {
                         Sua conta com {resolveProviderLabel(provider ?? "") ?? "OAuth"} ainda nao tem senha
                       </p>
                       <p className="mt-1 text-[#c7aba5]">
-                        {user ? `Logado como ${user.email}` : "Use uma senha para concluir seu cadastro."}
+                        {user
+                          ? `Logado como ${oauthDisplayName || oauthLogin || user.email}`
+                          : "Use uma senha para concluir seu cadastro."}
                       </p>
                     </div>
 
