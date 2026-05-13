@@ -235,6 +235,26 @@ describe("oauth routes", () => {
 
     await server.close();
   });
+
+  test("steam authorization url keeps state in return_to", async () => {
+    const server = createAuthApiServer({ env });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/auth/oauth/steam/start"
+    });
+
+    expect(response.statusCode).toBe(302);
+
+    const steamUrl = new URL(String(response.headers.location));
+    const returnTo = steamUrl.searchParams.get("openid.return_to");
+
+    expect(steamUrl.origin).toBe("https://steamcommunity.com");
+    expect(returnTo).not.toBeNull();
+    expect(new URL(String(returnTo)).searchParams.get("state")).toBeTruthy();
+
+    await server.close();
+  });
 });
 
 function createUsersRepository(): PlatformUserRepository {

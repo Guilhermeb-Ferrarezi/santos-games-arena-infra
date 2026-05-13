@@ -54,13 +54,14 @@ export function buildOAuthAuthorizationUrl(
   }
 
   const url = new URL("https://steamcommunity.com/openid/login");
+  const steamReturnTo = new URL(callbackUrl);
+  steamReturnTo.searchParams.set("state", state);
   url.searchParams.set("openid.ns", "http://specs.openid.net/auth/2.0");
   url.searchParams.set("openid.mode", "checkid_setup");
-  url.searchParams.set("openid.return_to", callbackUrl);
+  url.searchParams.set("openid.return_to", steamReturnTo.toString());
   url.searchParams.set("openid.realm", resolvePublicUrl(env));
   url.searchParams.set("openid.identity", "http://specs.openid.net/auth/2.0/identifier_select");
   url.searchParams.set("openid.claimed_id", "http://specs.openid.net/auth/2.0/identifier_select");
-  url.searchParams.set("state", state);
   return url.toString();
 }
 
