@@ -135,6 +135,8 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
 
       if (health.status === "degraded") {
         reply.code(503);
+      }else{
+        console.log(`Serivdor rodando! ${API_PREFIX}/health`)
       }
 
       return health;
