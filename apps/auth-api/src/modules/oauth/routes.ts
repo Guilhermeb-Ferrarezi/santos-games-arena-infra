@@ -10,6 +10,10 @@ import { createSessionId, type SessionStore } from "../session/session-store";
 import type { OAuthProvider } from "./providers";
 import type { PlatformUserRepository } from "../users/platform-user-repository";
 
+function needsPasswordSetup(passwordHash: string) {
+  return passwordHash.startsWith("oauth:");
+}
+
 export function registerOAuthRoutes(
   server: FastifyInstance,
   env: Pick<
@@ -166,6 +170,49 @@ export function registerOAuthRoutes(
       });
     }
 
+    if (needsPasswordSetup(user.passwordHash)) {
+      await dependencies.users.updateLastLogin(user.id);
+
+      const sessionId = createSessionId();
+      if (dependencies.sessions) {
+        await dependencies.sessions.create({
+          sessionId,
+          userId: user.id,
+          ttlSeconds: env.SESSION_TTL_SECONDS
+        });
+      }
+
+      const token = await createSessionToken(
+        {
+          userId: user.id,
+          email: user.email,
+          login: user.login,
+          sessionId
+        },
+        env
+      );
+
+      reply.setCookie(env.AUTH_COOKIE_NAME, token, {
+        domain: env.AUTH_COOKIE_DOMAIN,
+        httpOnly: true,
+        maxAge: env.SESSION_TTL_SECONDS,
+        path: "/",
+        sameSite: "lax",
+        secure: env.NODE_ENV === "production"
+      });
+
+      return reply.redirect(
+        buildPasswordSetupUrl(env, oauthState.returnTo, {
+          provider,
+          externalAccountId: profile.externalAccountId,
+          email: user.email,
+          login: user.login,
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl
+        })
+      );
+    }
+
     await dependencies.users.updateLastLogin(user.id);
 
     const sessionId = createSessionId();
@@ -217,7 +264,10 @@ function buildPasswordSetupUrl(
   url.searchParams.set("email", profile.email);
   url.searchParams.set("login", profile.login);
   url.searchParams.set("returnTo", returnTo);
-  url.searchParams.set("toast", `Conta criada com ${providerLabel(profile.provider)}. Defina sua senha para finalizar.`);
+  url.searchParams.set(
+    "toast",
+    `Sua conta com ${providerLabel(profile.provider)} ainda nao tem senha. Defina uma senha para continuar.`
+  );
 
   if (profile.displayName) {
     url.searchParams.set("displayName", profile.displayName);

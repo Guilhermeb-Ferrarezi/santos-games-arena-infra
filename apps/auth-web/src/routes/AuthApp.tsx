@@ -187,7 +187,7 @@ export function AuthApp() {
             className="w-full max-w-[440px]"
           >
             {toastMessage ? (
-              <div className="mb-4 rounded-md border border-[#ff334f]/35 bg-[#341414]/95 px-4 py-3 text-sm text-[#ffd6dc] shadow-[0_14px_40px_rgba(0,0,0,0.35)]">
+              <div className="mb-4 rounded-md border border-[#29c36a]/35 bg-[#11261a]/95 px-4 py-3 text-sm text-[#d8ffe7] shadow-[0_14px_40px_rgba(0,0,0,0.35)]">
                 {toastMessage}
               </div>
             ) : null}
@@ -227,7 +227,7 @@ export function AuthApp() {
                   </h1>
                   <p className="mt-2 text-sm text-[#bca7a3]">
                     {isPasswordSetup
-                      ? "Sua conta foi criada. Defina uma senha para finalizar."
+                      ? "Sua conta ainda nao possui senha. Defina uma senha para continuar."
                       : isRegister
                         ? "Finalize seu cadastro com email, usuario e senha."
                         : "Acesse sua conta com um provedor ou email."}
@@ -242,7 +242,7 @@ export function AuthApp() {
                   <div className="mt-8 space-y-5">
                     <div className="rounded-md border border-white/8 bg-[#341515] px-4 py-3 text-sm text-[#f3dbd6]">
                       <p className="font-semibold text-[#fff2ef]">
-                        Conta criada com {resolveProviderLabel(provider ?? "") ?? "OAuth"}
+                        Sua conta com {resolveProviderLabel(provider ?? "") ?? "OAuth"} ainda nao tem senha
                       </p>
                       <p className="mt-1 text-[#c7aba5]">
                         {user ? `Logado como ${user.email}` : "Use uma senha para concluir seu cadastro."}

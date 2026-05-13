@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { parseAuthApiEnv } from "../src/config/env";
+import { createPasswordHash } from "../src/modules/auth/password";
 import type { ExternalAuthAccountRepository } from "../src/modules/oauth/external-auth-account-repository";
 import type { OAuthClient } from "../src/modules/oauth/oauth-client";
 import type { PlatformUserRepository } from "../src/modules/users/platform-user-repository";
@@ -41,7 +42,7 @@ describe("oauth routes", () => {
       id: 1,
       email: "player@santos-games.com",
       login: "player",
-      passwordHash: "oauth:google:google-1",
+      passwordHash: await createPasswordHash("secret123"),
       isActive: true
     };
     const externalAccounts = createExternalAccountsRepository(linkedUser);
@@ -78,6 +79,50 @@ describe("oauth routes", () => {
     expect(response.headers.location).toBe("https://santos-games.com");
     expect(setCookie).toContain("sg_auth=");
     expect(externalAccounts.linked.length).toBe(0);
+
+    await server.close();
+  });
+
+  test("callback redirects to password setup when linked user has no password", async () => {
+    const users = createUsersRepository();
+    const linkedUser = {
+      id: 1,
+      email: "player@santos-games.com",
+      login: "player",
+      passwordHash: "oauth:google:google-1",
+      isActive: true
+    };
+    const externalAccounts = createExternalAccountsRepository(linkedUser);
+    const oauthClient = createOAuthClient({
+      provider: "google",
+      externalAccountId: "google-1",
+      email: "player@santos-games.com",
+      login: "player",
+      displayName: "Player"
+    });
+    const server = createAuthApiServer({
+      env,
+      externalAccounts,
+      oauthClient,
+      users
+    });
+
+    const start = await server.inject({
+      method: "GET",
+      url: "/api/auth/oauth/google/start"
+    });
+    const state = new URL(String(start.headers.location)).searchParams.get("state");
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/auth/oauth/google/callback?code=code-1&state=${encodeURIComponent(String(state))}`
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(new URL(String(response.headers.location)).pathname).toBe("/set-password");
+    expect(new URL(String(response.headers.location)).searchParams.get("toast")).toContain(
+      "ainda nao tem senha"
+    );
 
     await server.close();
   });
