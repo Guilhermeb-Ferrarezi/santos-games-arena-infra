@@ -130,18 +130,20 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
   }
 
   if (dependencies) {
-    server.get(`${API_PREFIX}/health/dependencies`, async (_request, reply) => {
+    try {
+      server.get(`${API_PREFIX}/health/dependencies`, async (_request, reply) => {
       const health = await checkDependencies(dependencies);
+      
 
       if (health.status === "degraded") {
         reply.code(503);
-      }else{
-        console.log(`Serivdor rodando! ${API_PREFIX}/health`)
       }
-
       return health;
     });
-  }
+    }catch(err){console.error(`erro ao rodar: ${err}`);
+    }
 
+    
+  }
   return server;
 }
