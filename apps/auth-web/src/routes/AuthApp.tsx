@@ -74,13 +74,22 @@ export function AuthApp() {
     onSuccess: () => window.location.replace(returnTo)
   });
   const user = session.data?.authenticated ? session.data.user : null;
+  const needsPasswordSetup = session.data?.needsPasswordSetup ?? false;
   const returnTo = resolveReturnTo();
 
   useEffect(() => {
-    if (user && !isPasswordSetup) {
+    if (user && needsPasswordSetup && !isPasswordSetup) {
+      const url = new URL("/set-password", window.location.origin);
+      url.searchParams.set("returnTo", returnTo);
+      url.searchParams.set("toast", "Sua conta ainda nao possui senha. Defina uma senha para continuar.");
+      window.location.replace(url.toString());
+      return;
+    }
+
+    if (user && !needsPasswordSetup && !isPasswordSetup) {
       window.location.replace(returnTo);
     }
-  }, [isPasswordSetup, returnTo, user]);
+  }, [isPasswordSetup, needsPasswordSetup, returnTo, user]);
 
   useEffect(() => {
     if (isPasswordSetup && !session.isLoading && !user) {

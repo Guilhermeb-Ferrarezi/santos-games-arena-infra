@@ -9,10 +9,7 @@ import { createSessionToken } from "../session/session-token";
 import { createSessionId, type SessionStore } from "../session/session-store";
 import type { OAuthProvider } from "./providers";
 import type { PlatformUserRepository } from "../users/platform-user-repository";
-
-function needsPasswordSetup(passwordHash: string) {
-  return passwordHash.startsWith("oauth:");
-}
+import { needsPasswordSetup } from "../auth/password";
 
 export function registerOAuthRoutes(
   server: FastifyInstance,

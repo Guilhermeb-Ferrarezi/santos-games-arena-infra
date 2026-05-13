@@ -26,6 +26,10 @@ export async function createPasswordHash(password: string): Promise<string> {
   });
 }
 
+export function needsPasswordSetup(passwordHash: string) {
+  return passwordHash.startsWith("oauth:");
+}
+
 export async function createLegacyPasswordHash(
   password: string,
   secret: string

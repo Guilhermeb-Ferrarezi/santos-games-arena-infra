@@ -66,7 +66,8 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
             JWT_SECRET: env.JWT_SECRET,
             NODE_ENV: env.NODE_ENV
           },
-          sessions
+          sessions,
+          users
         );
       },
       { prefix: AUTH_PREFIX }

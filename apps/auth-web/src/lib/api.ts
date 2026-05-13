@@ -1,6 +1,15 @@
-import type { AuthSessionResponse } from "@santos-games/auth-contracts";
 import axios from "axios";
 import { z } from "zod";
+
+type AuthSessionResponse = {
+  authenticated: boolean;
+  user: {
+    id: number;
+    email: string;
+    login: string;
+  } | null;
+  needsPasswordSetup?: boolean;
+};
 
 const loginResponseSchema = z.object({
   authenticated: z.literal(true),

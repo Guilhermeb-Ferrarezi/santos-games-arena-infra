@@ -55,7 +55,8 @@ describe("auth session routes", () => {
         id: 10,
         email: "player@santos-games.com",
         login: "player"
-      }
+      },
+      needsPasswordSetup: false
     });
 
     await server.close();
@@ -110,6 +111,50 @@ describe("auth session routes", () => {
 
     expect(response.statusCode).toBe(204);
     expect(await sessions.exists("session-1")).toBe(false);
+
+    await server.close();
+  });
+
+  test("returns needsPasswordSetup for oauth users without local password", async () => {
+    const users = {
+      async findById() {
+        return {
+          id: 10,
+          email: "player@santos-games.com",
+          login: "player",
+          passwordHash: "oauth:google:google-1",
+          isActive: true
+        };
+      }
+    };
+    const server = createAuthApiServer({ env, users: users as never });
+    const token = await createSessionToken(
+      {
+        userId: 10,
+        email: "player@santos-games.com",
+        login: "player"
+      },
+      env
+    );
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/auth/session",
+      cookies: {
+        sg_auth: token
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      authenticated: true,
+      user: {
+        id: 10,
+        email: "player@santos-games.com",
+        login: "player"
+      },
+      needsPasswordSetup: true
+    });
 
     await server.close();
   });
