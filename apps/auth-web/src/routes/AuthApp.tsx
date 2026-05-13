@@ -18,6 +18,7 @@ import {
 
 const mainSiteUrl = "https://santos-games.com";
 const allowedReturnToHosts = new Set(["santos-games.com", "www.santos-games.com"]);
+const MIN_PASSWORD_LENGTH = 8;
 
 type Provider = {
   name: string;
@@ -127,6 +128,11 @@ export function AuthApp() {
       return;
     }
 
+    if (!isPasswordAcceptable(registerPassword)) {
+      setToastMessage(`A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`);
+      return;
+    }
+
     registerMutation.mutate({
       email: registerEmail,
       login: registerLogin,
@@ -158,6 +164,11 @@ export function AuthApp() {
 
     if (setupPassword !== setupConfirmPassword) {
       setToastMessage("As senhas nao conferem.");
+      return;
+    }
+
+    if (!isPasswordAcceptable(setupPassword)) {
+      setToastMessage(`A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`);
       return;
     }
 
@@ -258,6 +269,29 @@ export function AuthApp() {
                           ? `Logado como ${oauthDisplayName || oauthLogin || user.email}`
                           : "Use uma senha para concluir seu cadastro."}
                       </p>
+                      {provider ? (
+                        <div className="mt-3 flex items-center gap-3 rounded-md border border-white/8 bg-[#401919] px-3 py-2">
+                          {oauthAvatarUrl ? (
+                            <img
+                              src={oauthAvatarUrl}
+                              alt=""
+                              className="h-9 w-9 rounded-full border border-white/10 object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-[#2d1212] text-xs font-bold uppercase text-[#ff6a7b]">
+                              {resolveProviderLabel(provider)?.slice(0, 1) ?? "O"}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[#fff2ef]">
+                              {oauthDisplayName || oauthLogin || user?.email || "Conta OAuth"}
+                            </p>
+                            <p className="text-xs text-[#c7aba5]">
+                              Origem: {resolveProviderLabel(provider)}
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <form className="space-y-4" onSubmit={onSetupPasswordSubmit}>
@@ -287,6 +321,9 @@ export function AuthApp() {
                             {showSetupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </button>
                         </div>
+                        <p className="text-xs text-[#b8928c]">
+                          Mínimo de {MIN_PASSWORD_LENGTH} caracteres.
+                        </p>
                       </div>
 
                       <div className="space-y-2">
@@ -432,6 +469,9 @@ export function AuthApp() {
                           placeholder="••••••••"
                           className="h-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
                         />
+                        <p className="text-xs text-[#b8928c]">
+                          Mínimo de {MIN_PASSWORD_LENGTH} caracteres.
+                        </p>
                       </div>
 
                       <div className="space-y-2">
@@ -486,6 +526,30 @@ export function AuthApp() {
                   </>
                 ) : (
                   <>
+                    {provider ? (
+                      <div className="mt-6 flex items-center gap-3 rounded-md border border-white/8 bg-[#341515] px-4 py-3 text-sm text-[#f3dbd6]">
+                        {oauthAvatarUrl ? (
+                          <img
+                            src={oauthAvatarUrl}
+                            alt=""
+                            className="h-10 w-10 rounded-full border border-white/10 object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#2d1212] text-xs font-bold uppercase text-[#ff6a7b]">
+                            {resolveProviderLabel(provider)?.slice(0, 1) ?? "O"}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-[#fff2ef]">
+                            {oauthDisplayName || oauthLogin || "Conta OAuth"}
+                          </p>
+                          <p className="text-xs text-[#c7aba5]">
+                            Entrada iniciada com {resolveProviderLabel(provider)}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+
                     <div className="mt-8 space-y-3">
                       {providers.map(({ name, label, icon }) => (
                         <Button
@@ -643,6 +707,10 @@ function resolveReturnTo() {
   }
 
   return fallback;
+}
+
+function isPasswordAcceptable(password: string) {
+  return password.trim().length >= MIN_PASSWORD_LENGTH;
 }
 
 function resolveInitialToastMessage(
