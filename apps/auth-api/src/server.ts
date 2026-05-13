@@ -1,11 +1,12 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import type { AuthHealthResponse } from "@santos-games/auth-contracts";
-import Fastify from "fastify";
 import { registerMongoHttpLogging } from "@santos-games/logs";
+import Fastify from "fastify";
 
 import type { AuthApiEnv } from "./config/env";
 import { checkDependencies, type DependencyPingers } from "./infra/dependencies";
+import { createHttpLogUserResolver } from "./modules/logs/http-log-user-resolver";
 import { registerAuthRoutes } from "./modules/auth/routes";
 import type { ExternalAuthAccountRepository } from "./modules/oauth/external-auth-account-repository";
 import type { OAuthClient } from "./modules/oauth/oauth-client";
@@ -60,7 +61,17 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
       dbName: env.LOGS_MONGO_DB_NAME,
       collectionName: env.LOGS_HTTP_COLLECTION,
       routeBlacklist,
-      getRouteBlacklist
+      getRouteBlacklist,
+      resolveUser: env.AUTH_COOKIE_NAME && env.JWT_SECRET
+        ? createHttpLogUserResolver(
+            {
+              AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
+              JWT_SECRET: env.JWT_SECRET
+            },
+            users,
+            sessions
+          )
+        : undefined
     });
   }
 
