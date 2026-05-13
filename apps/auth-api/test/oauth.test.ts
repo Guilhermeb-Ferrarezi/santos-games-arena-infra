@@ -167,7 +167,7 @@ describe("oauth routes", () => {
     await server.close();
   });
 
-  test("callback without linked user from login flow returns to login page", async () => {
+  test("callback without linked user from login flow returns to register page", async () => {
     const users = createUsersRepository();
     const externalAccounts = createExternalAccountsRepository();
     const oauthClient = createOAuthClient({
@@ -198,10 +198,59 @@ describe("oauth routes", () => {
     const loginUrl = new URL(String(response.headers.location));
 
     expect(response.statusCode).toBe(302);
-    expect(loginUrl.pathname).toBe("/");
-    expect(loginUrl.searchParams.get("toast")).toContain(
-      "Nenhuma conta vinculada ao Google"
-    );
+    expect(loginUrl.pathname).toBe("/register");
+    expect(loginUrl.searchParams.get("provider")).toBe("google");
+    expect(loginUrl.searchParams.get("email")).toBe("player@santos-games.com");
+    expect(loginUrl.searchParams.get("login")).toBe("player");
+    expect(loginUrl.searchParams.get("toast")).toContain("Nenhuma conta vinculada ao Google");
+
+    await server.close();
+  });
+
+  test("steam callback without linked user from login flow returns to register page", async () => {
+    const users = createUsersRepository();
+    const externalAccounts = createExternalAccountsRepository();
+    const oauthClient = createOAuthClient({
+      provider: "steam",
+      externalAccountId: "76561198000000001",
+      email: "player@santos-games.com",
+      login: "player",
+      displayName: "Steam Player"
+    });
+    const server = createAuthApiServer({
+      env,
+      externalAccounts,
+      oauthClient,
+      users
+    });
+
+    const start = await server.inject({
+      method: "GET",
+      url: "/api/auth/oauth/steam/start?entry=login"
+    });
+    const steamUrl = new URL(String(start.headers.location));
+    const returnTo = new URL(String(steamUrl.searchParams.get("openid.return_to")));
+    const state = returnTo.searchParams.get("state");
+
+    const response = await server.inject({
+      method: "GET",
+      url:
+        "/api/auth/oauth/steam/callback" +
+        `?openid.mode=id_res` +
+        `&openid.claimed_id=${encodeURIComponent("https://steamcommunity.com/openid/id/76561198000000001")}` +
+        `&openid.identity=${encodeURIComponent("https://steamcommunity.com/openid/id/76561198000000001")}` +
+        `&openid.return_to=${encodeURIComponent(String(returnTo))}` +
+        `&state=${encodeURIComponent(String(state))}`
+    });
+
+    const redirectUrl = new URL(String(response.headers.location));
+
+    expect(response.statusCode).toBe(302);
+    expect(redirectUrl.pathname).toBe("/register");
+    expect(redirectUrl.searchParams.get("provider")).toBe("steam");
+    expect(redirectUrl.searchParams.get("email")).toBe("player@santos-games.com");
+    expect(redirectUrl.searchParams.get("login")).toBe("player");
+    expect(redirectUrl.searchParams.get("toast")).toContain("Nenhuma conta vinculada ao Steam");
 
     await server.close();
   });

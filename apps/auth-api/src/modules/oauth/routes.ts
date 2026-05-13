@@ -172,10 +172,7 @@ export function registerOAuthRoutes(
       }
 
       return reply.redirect(
-        buildLoginUrl(
-          env,
-          `Nenhuma conta vinculada ao ${providerLabel(provider)}. Use o cadastro para criar uma conta.`
-        )
+        buildRegisterUrl(env, oauthState.returnTo, profile, providerLabel(provider))
       );
     }
 
@@ -343,6 +340,42 @@ function buildLoginUrl(
   if (toast) {
     url.searchParams.set("toast", toast);
   }
+
+  return url.toString();
+}
+
+function buildRegisterUrl(
+  env: Pick<AuthApiEnv, "AUTH_PUBLIC_URL">,
+  returnTo: string,
+  profile: {
+    provider: OAuthProvider;
+    email: string;
+    login: string;
+    displayName?: string;
+    avatarUrl?: string;
+  },
+  providerName?: string | null
+) {
+  const url = new URL("/register", resolvePublicUrl(env));
+  url.searchParams.set("returnTo", returnTo);
+  url.searchParams.set("provider", profile.provider);
+  url.searchParams.set("email", profile.email);
+  url.searchParams.set("login", profile.login);
+
+  if (profile.displayName) {
+    url.searchParams.set("displayName", profile.displayName);
+  }
+
+  if (profile.avatarUrl) {
+    url.searchParams.set("avatarUrl", profile.avatarUrl);
+  }
+
+  url.searchParams.set(
+    "toast",
+    providerName
+      ? `Nenhuma conta vinculada ao ${providerName}. Crie sua conta para continuar.`
+      : "Nenhuma conta vinculada. Crie sua conta para continuar."
+  );
 
   return url.toString();
 }
