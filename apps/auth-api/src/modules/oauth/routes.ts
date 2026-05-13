@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { AuthApiEnv } from "../../../config/env";
 import { buildOAuthAuthorizationUrl, isOAuthProvider } from "./providers";
 import type { ExternalAuthAccountRepository } from "./external-auth-account-repository";
-import type { OAuthClient } from "./oauth-client";
+import type { OAuthClient, OAuthProfile } from "./oauth-client";
 import { createOAuthState, readOAuthState } from "./oauth-state";
 import { createSessionToken } from "../session/session-token";
 import { createSessionId, type SessionStore } from "../session/session-store";
@@ -59,7 +59,7 @@ export function registerOAuthRoutes(
 
   server.get("/oauth/:provider/callback", async (request, reply) => {
     const { provider } = request.params as { provider: string };
-    const query = request.query as { code?: string; state?: string };
+    const query = request.query as Record<string, string | string[] | undefined>;
 
     if (!isOAuthProvider(provider)) {
       return reply.code(404).send({
@@ -68,7 +68,7 @@ export function registerOAuthRoutes(
       });
     }
 
-    const oauthState = query.state ? await readOAuthState(query.state, provider, env) : null;
+    const oauthState = await readOAuthStateFromCallback(provider, query, env);
     if (!oauthState) {
       return reply.code(401).send({
         error: "invalid_oauth_state",
@@ -76,7 +76,7 @@ export function registerOAuthRoutes(
       });
     }
 
-    if (!query.code) {
+    if (provider !== "steam" && !getSingleQueryValue(query, "code")) {
       return reply.code(400).send({
         error: "missing_oauth_code",
         message: "Codigo OAuth ausente."
@@ -90,7 +90,21 @@ export function registerOAuthRoutes(
       });
     }
 
-    const profile = await dependencies.oauthClient.exchangeCodeForProfile(provider, query.code);
+    let profile: OAuthProfile;
+    try {
+      profile =
+        provider === "steam"
+          ? await dependencies.oauthClient.exchangeSteamOpenId(query)
+          : await dependencies.oauthClient.exchangeCodeForProfile(
+              provider,
+              getSingleQueryValue(query, "code") ?? ""
+            );
+    } catch {
+      return reply.code(401).send({
+        error: "invalid_oauth_response",
+        message: "Resposta OAuth invalida."
+      });
+    }
     let user = await dependencies.externalAccounts.findLinkedUser(
       provider,
       profile.externalAccountId
@@ -247,6 +261,44 @@ export function registerOAuthRoutes(
 
     return reply.redirect(oauthState.returnTo);
   });
+}
+
+async function readOAuthStateFromCallback(
+  provider: OAuthProvider,
+  query: Record<string, string | string[] | undefined>,
+  env: Pick<AuthApiEnv, "JWT_SECRET">
+) {
+  if (provider === "steam") {
+    const returnTo = getSingleQueryValue(query, "openid.return_to");
+    let state: string | null = null;
+
+    if (returnTo) {
+      try {
+        state = new URL(returnTo).searchParams.get("state");
+      } catch {
+        state = null;
+      }
+    }
+
+    if (!state) {
+      return null;
+    }
+
+    return readOAuthState(state, provider, env);
+  }
+
+  const state = getSingleQueryValue(query, "state");
+  return state ? readOAuthState(state, provider, env) : null;
+}
+
+function getSingleQueryValue(query: Record<string, string | string[] | undefined>, key: string) {
+  const value = query[key];
+
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return typeof value === "string" ? value : undefined;
 }
 
 function buildPasswordSetupUrl(

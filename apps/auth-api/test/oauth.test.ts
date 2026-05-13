@@ -255,6 +255,60 @@ describe("oauth routes", () => {
 
     await server.close();
   });
+
+  test("steam callback logs in linked user without requiring code param", async () => {
+    const users = createUsersRepository();
+    const linkedUser = {
+      id: 1,
+      email: "player@santos-games.com",
+      login: "player",
+      passwordHash: await createPasswordHash("secret123"),
+      isActive: true
+    };
+    const externalAccounts = createExternalAccountsRepository(linkedUser);
+    const oauthClient = createOAuthClient({
+      provider: "steam",
+      externalAccountId: "76561198000000001",
+      email: "player@santos-games.com",
+      login: "player",
+      displayName: "Steam Player"
+    });
+    const server = createAuthApiServer({
+      env,
+      externalAccounts,
+      oauthClient,
+      users
+    });
+
+    const start = await server.inject({
+      method: "GET",
+      url: "/api/auth/oauth/steam/start"
+    });
+    const steamUrl = new URL(String(start.headers.location));
+    const returnTo = new URL(String(steamUrl.searchParams.get("openid.return_to")));
+    const state = returnTo.searchParams.get("state");
+
+    const response = await server.inject({
+      method: "GET",
+      url:
+        "/api/auth/oauth/steam/callback" +
+        `?openid.mode=id_res` +
+        `&openid.claimed_id=${encodeURIComponent("https://steamcommunity.com/openid/id/76561198000000001")}` +
+        `&openid.identity=${encodeURIComponent("https://steamcommunity.com/openid/id/76561198000000001")}` +
+        `&openid.return_to=${encodeURIComponent(String(returnTo))}` +
+        `&state=${encodeURIComponent(String(state))}`
+    });
+
+    const setCookie = Array.isArray(response.headers["set-cookie"])
+      ? response.headers["set-cookie"].join("; ")
+      : response.headers["set-cookie"];
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe("https://santos-games.com");
+    expect(setCookie).toContain("sg_auth=");
+
+    await server.close();
+  });
 });
 
 function createUsersRepository(): PlatformUserRepository {
@@ -328,6 +382,9 @@ function createOAuthClient(profile: Awaited<ReturnType<OAuthClient["exchangeCode
   return {
     async exchangeCodeForProfile() {
       return profile;
+    },
+    async exchangeSteamOpenId() {
+      return profile as Awaited<ReturnType<OAuthClient["exchangeSteamOpenId"]>>;
     }
   };
 }

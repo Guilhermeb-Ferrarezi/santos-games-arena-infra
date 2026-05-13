@@ -13,7 +13,10 @@ export type OAuthProfile = {
 
 export type OAuthClient = {
   exchangeCodeForProfile(provider: OAuthProvider, code: string): Promise<OAuthProfile>;
+  exchangeSteamOpenId(query: SteamOpenIdQuery): Promise<OAuthProfile>;
 };
+
+export type SteamOpenIdQuery = Record<string, string | string[] | undefined>;
 
 export function createOAuthClient(
   env: Pick<
@@ -37,6 +40,10 @@ export function createOAuthClient(
       }
 
       return verifySteamOpenId(env, code);
+    },
+
+    async exchangeSteamOpenId(query) {
+      return exchangeSteamOpenIdProfile(env, query);
     }
   };
 }
@@ -130,6 +137,124 @@ async function verifySteamOpenId(
     login: `steam_${steamId}`,
     displayName: `Steam ${steamId}`
   };
+}
+
+async function exchangeSteamOpenIdProfile(
+  env: Pick<AuthApiEnv, "STEAM_API_KEY">,
+  query: SteamOpenIdQuery
+): Promise<OAuthProfile> {
+  if (!env.STEAM_API_KEY) {
+    throw new Error("Steam OAuth is not configured");
+  }
+
+  const mode = getSingleQueryValue(query, "openid.mode");
+  if (mode !== "id_res") {
+    throw new Error("Invalid Steam OpenID response");
+  }
+
+  const claimedId =
+    getSingleQueryValue(query, "openid.claimed_id") ?? getSingleQueryValue(query, "openid.identity");
+  const steamId = extractSteamId(claimedId);
+  if (!steamId) {
+    throw new Error("Invalid Steam identifier");
+  }
+
+  const verificationResponse = await fetch("https://steamcommunity.com/openid/login", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body: buildSteamVerificationBody(query)
+  });
+
+  if (!verificationResponse.ok) {
+    throw new Error(`Steam OpenID verification failed with ${verificationResponse.status}`);
+  }
+
+  const verificationBody = await verificationResponse.text();
+  if (!verificationBody.includes("is_valid:true")) {
+    throw new Error("Steam OpenID response is not valid");
+  }
+
+  const persona = await fetchSteamPersona(env.STEAM_API_KEY, steamId);
+
+  return {
+    provider: "steam",
+    externalAccountId: steamId,
+    email: `${steamId}@steam.oauth.santos-games.local`,
+    login: `steam_${steamId}`,
+    displayName: persona?.displayName ?? `Steam ${steamId}`,
+    avatarUrl: persona?.avatarUrl
+  };
+}
+
+function buildSteamVerificationBody(query: SteamOpenIdQuery) {
+  const params = new URLSearchParams();
+  params.set("openid.mode", "check_authentication");
+
+  for (const [key, value] of Object.entries(query)) {
+    if (!key.startsWith("openid.") || key === "openid.mode") {
+      continue;
+    }
+
+    const normalized = getSingleQueryValue(query, key);
+    if (normalized !== undefined) {
+      params.set(key, normalized);
+    }
+  }
+
+  return params;
+}
+
+async function fetchSteamPersona(
+  apiKey: string,
+  steamId: string
+): Promise<{ displayName?: string; avatarUrl?: string } | null> {
+  const response = await fetch(
+    `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${encodeURIComponent(apiKey)}&steamids=${encodeURIComponent(steamId)}`
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as {
+    response?: {
+      players?: Array<{
+        personaname?: string;
+        avatarfull?: string;
+      }>;
+    };
+  };
+
+  const player = payload.response?.players?.[0];
+  if (!player) {
+    return null;
+  }
+
+  return {
+    displayName: player.personaname,
+    avatarUrl: player.avatarfull
+  };
+}
+
+function getSingleQueryValue(query: SteamOpenIdQuery, key: string) {
+  const value = query[key];
+
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return typeof value === "string" ? value : undefined;
+}
+
+function extractSteamId(value?: string) {
+  if (!value) {
+    return null;
+  }
+
+  const match = value.match(/^https:\/\/steamcommunity\.com\/openid\/id\/(\d+)$/);
+  return match?.[1] ?? null;
 }
 
 async function postForm<T>(url: string, body: Record<string, string>): Promise<T> {

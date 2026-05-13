@@ -22,7 +22,7 @@ Current estimate: 97%.
 - Logout revokes stored sessions.
 - OAuth start redirects for Google, Discord and Steam.
 - OAuth callbacks for Google and Discord token exchange/profile lookup.
-- Steam callback scaffolding and Steam ID session creation path.
+- Steam OpenID callback verification and Steam ID session creation path.
 - External account linking through `External_Auth_Account`.
 - EF Core migration for `External_Auth_Account` in the .NET project.
 - `External_Auth_Account` migration applied to the configured database with `dotnet ef database update`.
@@ -34,7 +34,6 @@ Current estimate: 97%.
 ## Not Done
 
 - Full live OAuth validation with real Google, Discord and Steam applications.
-- Steam OpenID callback hardening against Steam's `check_authentication` response.
 - Refresh-token rotation if the platform needs long-lived sessions beyond the current Redis-backed session cookie.
 - Production seed/admin flow.
 - Integration test against a migrated real database.
