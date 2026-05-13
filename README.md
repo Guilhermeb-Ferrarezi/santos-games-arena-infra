@@ -62,3 +62,5 @@ O `.env` principal fica na raiz do monorepo e e carregado pelos apps em `apps/*`
 Os arquivos `.env.example` mostram o formato esperado sem segredos reais.
 
 Em desenvolvimento local, o `auth-web` pode deixar `VITE_AUTH_API_URL` vazio para usar `AUTH_PUBLIC_URL` como alvo do proxy do Vite.
+
+Para deploy em produção, a publicação agora é por DNS direto para o host do Contabo/Easypanel. Veja `docs/publicacao-dns.md`.
