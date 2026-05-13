@@ -43,11 +43,19 @@ export async function logout() {
   await api.post("/api/auth/logout");
 }
 
-export function startOAuth(provider: "google" | "discord" | "steam", returnTo?: string) {
+export function startOAuth(
+  provider: "google" | "discord" | "steam",
+  returnTo?: string,
+  entry?: "login" | "register"
+) {
   const url = new URL(`${api.defaults.baseURL}/api/auth/oauth/${provider}/start`, window.location.origin);
 
   if (returnTo) {
     url.searchParams.set("returnTo", returnTo);
+  }
+
+  if (entry) {
+    url.searchParams.set("entry", entry);
   }
 
   window.location.href = url.toString();

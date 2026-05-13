@@ -8,18 +8,21 @@ type OAuthStatePayload = {
   exp: number;
   nonce: string;
   returnTo: string;
+  entry?: "login" | "register";
 };
 
 export async function createOAuthState(
   provider: OAuthProvider,
   env: Pick<AuthApiEnv, "JWT_SECRET" | "OAUTH_STATE_TTL_SECONDS">,
-  returnTo?: string
+  returnTo?: string,
+  entry?: "login" | "register"
 ) {
   const payload: OAuthStatePayload = {
     provider,
     exp: Math.floor(Date.now() / 1000) + env.OAUTH_STATE_TTL_SECONDS,
     nonce: crypto.randomUUID(),
-    returnTo: normalizeReturnTo(returnTo)
+    returnTo: normalizeReturnTo(returnTo),
+    entry
   };
   const encodedPayload = base64UrlEncodeJson(payload);
   const signature = await sign(encodedPayload, env.JWT_SECRET);
@@ -52,7 +55,13 @@ export async function readOAuthState(
       payload.exp > Math.floor(Date.now() / 1000) &&
       typeof payload.returnTo === "string"
     ) {
-      return payload as OAuthStatePayload;
+      return {
+        provider: payload.provider,
+        exp: payload.exp,
+        nonce: payload.nonce ?? crypto.randomUUID(),
+        returnTo: payload.returnTo,
+        entry: payload.entry === "login" || payload.entry === "register" ? payload.entry : undefined
+      };
     }
   } catch {
     return null;

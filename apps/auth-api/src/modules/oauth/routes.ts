@@ -34,7 +34,7 @@ export function registerOAuthRoutes(
 ) {
   server.get("/oauth/:provider/start", async (request, reply) => {
     const { provider } = request.params as { provider: string };
-    const query = request.query as { returnTo?: string };
+    const query = request.query as { returnTo?: string; entry?: string };
 
     if (!isOAuthProvider(provider)) {
       return reply.code(404).send({
@@ -43,7 +43,8 @@ export function registerOAuthRoutes(
       });
     }
 
-    const state = await createOAuthState(provider, env, query.returnTo);
+    const entry = query.entry === "login" || query.entry === "register" ? query.entry : undefined;
+    const state = await createOAuthState(provider, env, query.returnTo, entry);
 
     try {
       return reply.redirect(buildOAuthAuthorizationUrl(provider, env, state));
@@ -95,7 +96,11 @@ export function registerOAuthRoutes(
     );
 
     if (!user) {
-      return reply.redirect(buildRegisterUrl(env, oauthState.returnTo, profile));
+      if (oauthState.entry === "register") {
+        return reply.redirect(buildRegisterUrl(env, oauthState.returnTo, profile));
+      }
+
+      return reply.redirect(resolvePublicUrl(env));
     }
 
     if (!user.isActive) {

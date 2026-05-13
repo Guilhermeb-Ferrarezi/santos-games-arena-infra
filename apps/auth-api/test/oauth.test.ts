@@ -101,7 +101,7 @@ describe("oauth routes", () => {
 
     const start = await server.inject({
       method: "GET",
-      url: "/api/auth/oauth/google/start?returnTo=https%3A%2F%2Fsantos-games.com%2Flol%2Fnexus"
+      url: "/api/auth/oauth/google/start?returnTo=https%3A%2F%2Fsantos-games.com%2Flol%2Fnexus&entry=register"
     });
     const state = new URL(String(start.headers.location)).searchParams.get("state");
 
@@ -116,6 +116,40 @@ describe("oauth routes", () => {
       "https://santos-games.com/lol/nexus"
     );
     expect(new URL(String(response.headers.location)).searchParams.get("provider")).toBe("google");
+
+    await server.close();
+  });
+
+  test("callback without linked user from login flow returns to login page", async () => {
+    const users = createUsersRepository();
+    const externalAccounts = createExternalAccountsRepository();
+    const oauthClient = createOAuthClient({
+      provider: "google",
+      externalAccountId: "google-1",
+      email: "player@santos-games.com",
+      login: "player",
+      displayName: "Player"
+    });
+    const server = createAuthApiServer({
+      env,
+      externalAccounts,
+      oauthClient,
+      users
+    });
+
+    const start = await server.inject({
+      method: "GET",
+      url: "/api/auth/oauth/google/start?entry=login"
+    });
+    const state = new URL(String(start.headers.location)).searchParams.get("state");
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/auth/oauth/google/callback?code=code-1&state=${encodeURIComponent(String(state))}`
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe("https://auth.santos-games.com");
 
     await server.close();
   });

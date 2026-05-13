@@ -217,7 +217,13 @@ export function AuthApp() {
                           type="button"
                           variant="outline"
                           className="group relative h-12 w-full justify-center overflow-hidden rounded-md border border-white/8 bg-[#351b1b] text-[0.95rem] font-medium text-[#f6eeeb] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)] transition-all duration-200 hover:-translate-y-px hover:border-[#ff334f]/45 hover:bg-[#3a1e1e]"
-                          onClick={() => startOAuth(name as "google" | "discord" | "steam", returnTo)}
+                          onClick={() =>
+                            startOAuth(
+                              name as "google" | "discord" | "steam",
+                              returnTo,
+                              isRegister ? "register" : "login"
+                            )
+                          }
                         >
                           <span
                             aria-hidden
@@ -351,7 +357,13 @@ export function AuthApp() {
                           type="button"
                           variant="outline"
                           className="group relative h-12 w-full justify-center overflow-hidden rounded-md border border-white/8 bg-[#351b1b] text-[0.95rem] font-medium text-[#f6eeeb] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)] transition-all duration-200 hover:-translate-y-px hover:border-[#ff334f]/45 hover:bg-[#3a1e1e]"
-                          onClick={() => startOAuth(name as "google" | "discord" | "steam", returnTo)}
+                          onClick={() =>
+                            startOAuth(
+                              name as "google" | "discord" | "steam",
+                              returnTo,
+                              isRegister ? "register" : "login"
+                            )
+                          }
                         >
                           <span
                             aria-hidden
