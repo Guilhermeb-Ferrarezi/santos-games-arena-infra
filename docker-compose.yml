@@ -1,5 +1,5 @@
 services:
-  auth-api:
+  sga-auth-api:
     build:
       context: .
       dockerfile: apps/auth-api/Dockerfile
@@ -35,7 +35,7 @@ services:
     ports:
       - "5173:80"
     depends_on:
-      - auth-api
+      - sga-auth-api
 
   cloudflared:
     image: cloudflare/cloudflared:latest
