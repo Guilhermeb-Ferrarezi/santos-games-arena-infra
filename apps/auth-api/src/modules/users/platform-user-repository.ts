@@ -1,6 +1,8 @@
 import type { PostgresClient } from "@santos-games/postgres";
 import type { OAuthProvider } from "../oauth/providers";
 
+const PLATFORM_USER_ROLE = 2;
+
 export type PlatformUser = {
   id: number;
   email: string;
@@ -40,7 +42,7 @@ export function createPlatformUserRepository(
         is_active: boolean;
       }>>`
         select id, email, login, password_hash, is_active
-        from "Platform_User"
+        from "User"
         where lower(email) = ${normalizedIdentifier}
            or lower(login) = ${normalizedIdentifier}
         limit 1
@@ -68,7 +70,7 @@ export function createPlatformUserRepository(
         is_active: boolean;
       }>>`
         select id, email, login, password_hash, is_active
-        from "Platform_User"
+        from "User"
         where id = ${userId}
         limit 1
       `;
@@ -92,10 +94,11 @@ export function createPlatformUserRepository(
         password_hash: string;
         is_active: boolean;
       }>>`
-        insert into "Platform_User" (
+        insert into "User" (
           email,
           login,
           password_hash,
+          role,
           is_active,
           created_at,
           updated_at
@@ -104,6 +107,7 @@ export function createPlatformUserRepository(
           ${input.email},
           ${input.login},
           ${input.passwordHash},
+          ${PLATFORM_USER_ROLE},
           true,
           now(),
           now()
@@ -128,10 +132,11 @@ export function createPlatformUserRepository(
         password_hash: string;
         is_active: boolean;
       }>>`
-        insert into "Platform_User" (
+        insert into "User" (
           email,
           login,
           password_hash,
+          role,
           is_active,
           created_at,
           updated_at
@@ -140,6 +145,7 @@ export function createPlatformUserRepository(
           ${input.email},
           ${input.login},
           ${`oauth:${input.provider}:${input.externalAccountId}`},
+          ${PLATFORM_USER_ROLE},
           true,
           now(),
           now()
@@ -158,7 +164,7 @@ export function createPlatformUserRepository(
 
     async updateLastLogin(userId: number) {
       await client`
-        update "Platform_User"
+        update "User"
         set last_login_at = now(),
             updated_at = now()
         where id = ${userId}

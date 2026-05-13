@@ -15,7 +15,7 @@ Current estimate: 97%.
 - Session JWT creation and verification.
 - `GET /api/auth/session`.
 - `POST /api/auth/logout`.
-- `POST /api/auth/login` against `Platform_User`.
+- `POST /api/auth/login` against `User`.
 - Password verification for bcrypt hashes and internal `sha256:` legacy/test hashes.
 - Cookie-based session.
 - Redis-backed session storage.

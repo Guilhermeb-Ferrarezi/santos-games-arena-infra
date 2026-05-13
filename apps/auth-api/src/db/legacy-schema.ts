@@ -1,7 +1,7 @@
 export const legacyAuthSchema = {
-  platformUser: {
-    sourceModel: "dotnet-primary-api/SGA_Plataforma.Infrastructure/Models/PlatformUsers-Models.cs",
-    table: "Platform_User",
+  user: {
+    sourceModel: "dotnet-primary-api/SGA_Plataforma.Infrastructure/Models/User-Models.cs",
+    table: "User",
     columns: {
       id: "id",
       createdAt: "created_at",
@@ -9,6 +9,7 @@ export const legacyAuthSchema = {
       email: "email",
       login: "login",
       passwordHash: "password_hash",
+      role: "role",
       isActive: "is_active",
       lastLoginAt: "last_login_at"
     },

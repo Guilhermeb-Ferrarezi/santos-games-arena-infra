@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "install:all": "find . -name package.json -not -path '*/node_modules/*' -exec dirname {} \\; | sort -u | while read -r dir; do (cd \"$dir\" && bun i); done",
     "build": "bun run --filter '*' build",
     "dev:auth-api": "bun run --cwd apps/auth-api dev",
     "dev:auth-web": "bun run --cwd apps/auth-web dev",

@@ -22,7 +22,7 @@ export function createExternalAuthAccountRepository(
       }>>`
         select u.id, u.email, u.login, u.password_hash, u.is_active
         from "External_Auth_Account" e
-        join "Platform_User" u on u.id = e.user_id
+        join "User" u on u.id = e.user_id
         where e.provider = ${provider}
           and e.external_account_id = ${externalAccountId}
         limit 1

@@ -7,7 +7,7 @@ As migrations continuam pertencendo ao projeto `dotnet-primary-api`. A `auth-api
 ## Fonte
 
 - `dotnet-primary-api/SGA_Plataforma.Infrastructure/Data/AppDbContext.cs`
-- `dotnet-primary-api/SGA_Plataforma.Infrastructure/Models/PlatformUsers-Models.cs`
+- `dotnet-primary-api/SGA_Plataforma.Infrastructure/Models/User-Models.cs`
 - `dotnet-primary-api/SGA_Plataforma.Infrastructure/Models/GameAccount-Models.cs`
 - `dotnet-primary-api/SGA_Plataforma.Infrastructure/Models/Role-Models.cs`
 - `dotnet-primary-api/SGA_Plataforma.Infrastructure/Models/ExternalAuthAccount-Models.cs`
@@ -16,9 +16,9 @@ As migrations continuam pertencendo ao projeto `dotnet-primary-api`. A `auth-api
 
 ## Tabelas Relevantes
 
-### `Platform_User`
+### `User`
 
-Modelo .NET: `PlatformUser`
+Modelo .NET: `User`
 
 Colunas principais:
 
@@ -28,6 +28,7 @@ Colunas principais:
 - `email`
 - `login`
 - `password_hash`
+- `role`
 - `is_active`
 - `last_login_at`
 
