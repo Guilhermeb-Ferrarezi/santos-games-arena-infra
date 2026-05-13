@@ -2,17 +2,22 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import type { AuthApiEnv } from "../../../config/env";
-import { createLegacyPasswordHash, verifyPassword } from "./password";
+import { createPasswordHash, verifyPassword } from "./password";
 import type { PlatformUserRepository } from "../users/platform-user-repository";
 import { createSessionToken } from "../session/session-token";
 import { createSessionId, type SessionStore } from "../session/session-store";
 import type { OAuthProvider } from "../oauth/providers";
 import type { ExternalAuthAccountRepository } from "../oauth/external-auth-account-repository";
 import { isOAuthProvider } from "../oauth/providers";
+import { verifySessionToken } from "../session/session-token";
 
 const loginBodySchema = z.object({
   identifier: z.string().trim().min(1),
   password: z.string().min(1)
+});
+
+const setPasswordBodySchema = z.object({
+  password: z.string().min(8)
 });
 
 const registerBodySchema = z.object({
@@ -164,7 +169,7 @@ export function registerAuthRoutes(
       });
     }
 
-    const passwordHash = await createLegacyPasswordHash(parsedBody.data.password, env.JWT_SECRET);
+    const passwordHash = await createPasswordHash(parsedBody.data.password);
     const user = await users.createUser({
       email: normalizedEmail,
       login: normalizedLogin,
@@ -221,6 +226,41 @@ export function registerAuthRoutes(
         email: user.email,
         login: user.login
       }
+    };
+  });
+
+  server.post("/password", async (request, reply) => {
+    const parsedBody = setPasswordBodySchema.safeParse(request.body);
+
+    if (!parsedBody.success) {
+      return reply.code(400).send({
+        error: "invalid_request",
+        message: "Senha invalida."
+      });
+    }
+
+    const token = request.cookies[env.AUTH_COOKIE_NAME];
+    const session = token ? await verifySessionToken(token, env) : null;
+
+    if (!session) {
+      return reply.code(401).send({
+        error: "unauthorized",
+        message: "Sessao invalida."
+      });
+    }
+
+    if (sessions && (!session.sessionId || !(await sessions.exists(session.sessionId)))) {
+      return reply.code(401).send({
+        error: "unauthorized",
+        message: "Sessao invalida."
+      });
+    }
+
+    const passwordHash = await createPasswordHash(parsedBody.data.password);
+    await users.updatePassword(session.userId, passwordHash);
+
+    return {
+      success: true
     };
   });
 }

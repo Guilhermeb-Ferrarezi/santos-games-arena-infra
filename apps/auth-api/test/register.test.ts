@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { parseAuthApiEnv } from "../src/config/env";
+import { createSessionToken } from "../src/modules/session/session-token";
 import { createLegacyPasswordHash, verifyPassword } from "../src/modules/auth/password";
 import type { ExternalAuthAccountRepository } from "../src/modules/oauth/external-auth-account-repository";
 import type { PlatformUserRepository } from "../src/modules/users/platform-user-repository";
@@ -111,6 +112,58 @@ describe("auth register route", () => {
   });
 });
 
+describe("auth password route", () => {
+  test("sets a password hash for an authenticated oauth user", async () => {
+    const sessions = createMemorySessionStore();
+    const users = createUsersRepository({
+      id: 1,
+      email: "player@santos-games.com",
+      login: "player",
+      passwordHash: "oauth:google:google-1",
+      isActive: true
+    });
+    await sessions.create({
+      sessionId: "session-1",
+      userId: 1,
+      ttlSeconds: 60
+    });
+
+    const server = createAuthApiServer({ env, sessions, users });
+    const token = await createSessionToken(
+      {
+        userId: 1,
+        email: "player@santos-games.com",
+        login: "player",
+        sessionId: "session-1"
+      },
+      env
+    );
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/auth/password",
+      cookies: {
+        sg_auth: token
+      },
+      payload: {
+        password: "newsecret123"
+      }
+    });
+
+    const updatedUser = await users.findByIdentifier("player@santos-games.com");
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      success: true
+    });
+    expect(updatedUser).not.toBeNull();
+    expect(updatedUser?.passwordHash).toContain("$2");
+    expect(await verifyPassword("newsecret123", updatedUser!.passwordHash, env)).toBe(true);
+
+    await server.close();
+  });
+});
+
 function createUsersRepository(
   initialUser?: Awaited<ReturnType<PlatformUserRepository["findByIdentifier"]>>
 ): PlatformUserRepository & { lastLoginUpdatedFor: number | null } {
@@ -151,6 +204,12 @@ function createUsersRepository(
       };
       users.set(user.id, user);
       return user;
+    },
+    async updatePassword(userId, passwordHash) {
+      const user = users.get(userId);
+      if (user) {
+        user.passwordHash = passwordHash;
+      }
     },
     async updateLastLogin(userId) {
       this.lastLoginUpdatedFor = userId;

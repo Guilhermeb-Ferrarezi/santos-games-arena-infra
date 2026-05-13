@@ -82,7 +82,7 @@ describe("oauth routes", () => {
     await server.close();
   });
 
-  test("callback redirects to supplied returnTo", async () => {
+  test("callback from register flow creates user and redirects to password setup", async () => {
     const users = createUsersRepository();
     const externalAccounts = createExternalAccountsRepository();
     const oauthClient = createOAuthClient({
@@ -111,11 +111,13 @@ describe("oauth routes", () => {
     });
 
     expect(response.statusCode).toBe(302);
-    expect(new URL(String(response.headers.location)).pathname).toBe("/register");
+    expect(new URL(String(response.headers.location)).pathname).toBe("/set-password");
     expect(new URL(String(response.headers.location)).searchParams.get("returnTo")).toBe(
       "https://santos-games.com/lol/nexus"
     );
     expect(new URL(String(response.headers.location)).searchParams.get("provider")).toBe("google");
+    expect(externalAccounts.linked).toHaveLength(1);
+    expect(await users.findByIdentifier("player@santos-games.com")).not.toBeNull();
 
     await server.close();
   });
@@ -149,7 +151,7 @@ describe("oauth routes", () => {
     });
 
     expect(response.statusCode).toBe(302);
-    expect(response.headers.location).toBe("https://auth.santos-games.com");
+    expect(response.headers.location).toBe("https://auth.santos-games.com/");
 
     await server.close();
   });
@@ -225,6 +227,7 @@ function createUsersRepository(): PlatformUserRepository {
       users.set(user.id, user);
       return user;
     },
+    async updatePassword() {},
     async updateLastLogin() {}
   };
 }

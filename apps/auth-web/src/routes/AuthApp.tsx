@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getSession, login, register as registerUser, startOAuth } from "@/lib/api";
+import {
+  getSession,
+  login,
+  register as registerUser,
+  setPassword as submitPasswordSetup,
+  startOAuth
+} from "@/lib/api";
 
 const mainSiteUrl = "https://santos-games.com";
 const allowedReturnToHosts = new Set(["santos-games.com", "www.santos-games.com"]);
@@ -28,16 +34,16 @@ const providers: Provider[] = [
 export function AuthApp() {
   const queryClient = useQueryClient();
   const isRegister = window.location.pathname.startsWith("/register");
+  const isPasswordSetup = window.location.pathname.startsWith("/set-password");
   const searchParams = new URLSearchParams(window.location.search);
   const provider = searchParams.get("provider");
-  const externalAccountId = searchParams.get("externalAccountId") ?? "";
   const oauthEmail = searchParams.get("email") ?? "";
   const oauthLogin = searchParams.get("login") ?? "";
   const oauthDisplayName = searchParams.get("displayName") ?? "";
   const oauthAvatarUrl = searchParams.get("avatarUrl") ?? "";
   const toast = searchParams.get("toast");
   const [toastMessage, setToastMessage] = useState<string | null>(
-    resolveInitialToastMessage(isRegister, provider, toast)
+    resolveInitialToastMessage(isRegister, isPasswordSetup, provider, toast)
   );
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -45,6 +51,10 @@ export function AuthApp() {
   const [registerLogin, setRegisterLogin] = useState(oauthLogin || oauthEmail.split("@")[0] || "");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+  const [setupPassword, setSetupPasswordValue] = useState("");
+  const [setupConfirmPassword, setSetupConfirmPassword] = useState("");
+  const [showSetupPassword, setShowSetupPassword] = useState(false);
+  const [showSetupConfirm, setShowSetupConfirm] = useState(false);
 
   const session = useQuery({
     queryKey: ["session"],
@@ -59,14 +69,24 @@ export function AuthApp() {
     mutationFn: registerUser,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["session"] })
   });
+  const setPasswordMutation = useMutation({
+    mutationFn: submitPasswordSetup,
+    onSuccess: () => window.location.replace(returnTo)
+  });
   const user = session.data?.authenticated ? session.data.user : null;
   const returnTo = resolveReturnTo();
 
   useEffect(() => {
-    if (user) {
+    if (user && !isPasswordSetup) {
       window.location.replace(returnTo);
     }
-  }, [returnTo, user]);
+  }, [isPasswordSetup, returnTo, user]);
+
+  useEffect(() => {
+    if (isPasswordSetup && !session.isLoading && !user) {
+      window.location.replace("/");
+    }
+  }, [isPasswordSetup, session.isLoading, user]);
 
   useEffect(() => {
     if (!toastMessage) {
@@ -103,7 +123,6 @@ export function AuthApp() {
       login: registerLogin,
       password: registerPassword,
       provider: provider ?? undefined,
-      externalAccountId: externalAccountId || undefined,
       displayName: oauthDisplayName || undefined,
       avatarUrl: oauthAvatarUrl || undefined
     });
@@ -123,6 +142,19 @@ export function AuthApp() {
 
   const onRegisterConfirmPasswordChange = (event: ChangeEvent<HTMLInputElement>) => {
     setRegisterConfirmPassword(event.currentTarget.value);
+  };
+
+  const onSetupPasswordSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (setupPassword !== setupConfirmPassword) {
+      setToastMessage("As senhas nao conferem.");
+      return;
+    }
+
+    setPasswordMutation.mutate({
+      password: setupPassword
+    });
   };
 
   return (
@@ -194,15 +226,108 @@ export function AuthApp() {
                     )}
                   </h1>
                   <p className="mt-2 text-sm text-[#bca7a3]">
-                    {isRegister
-                      ? "Finalize seu cadastro com email, usuario e senha."
-                      : "Acesse sua conta com um provedor ou email."}
+                    {isPasswordSetup
+                      ? "Sua conta foi criada. Defina uma senha para finalizar."
+                      : isRegister
+                        ? "Finalize seu cadastro com email, usuario e senha."
+                        : "Acesse sua conta com um provedor ou email."}
                   </p>
                 </header>
 
                 {session.isLoading ? (
                   <div className="flex h-[26rem] items-center justify-center">
                     <Loader2 className="h-5 w-5 animate-spin text-[#ff243f]" />
+                  </div>
+                ) : isPasswordSetup ? (
+                  <div className="mt-8 space-y-5">
+                    <div className="rounded-md border border-white/8 bg-[#341515] px-4 py-3 text-sm text-[#f3dbd6]">
+                      <p className="font-semibold text-[#fff2ef]">
+                        Conta criada com {resolveProviderLabel(provider ?? "") ?? "OAuth"}
+                      </p>
+                      <p className="mt-1 text-[#c7aba5]">
+                        {user ? `Logado como ${user.email}` : "Use uma senha para concluir seu cadastro."}
+                      </p>
+                    </div>
+
+                    <form className="space-y-4" onSubmit={onSetupPasswordSubmit}>
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor="setup-password"
+                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
+                        >
+                          Senha
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="setup-password"
+                            type={showSetupPassword ? "text" : "password"}
+                            value={setupPassword}
+                            onChange={(event) => setSetupPasswordValue(event.currentTarget.value)}
+                            autoComplete="new-password"
+                            placeholder="••••••••"
+                            className="h-12 pr-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowSetupPassword((current) => !current)}
+                            className="absolute inset-y-0 right-0 flex items-center px-3 text-[#c89a94] transition-colors hover:text-[#fff2ef]"
+                            aria-label={showSetupPassword ? "Ocultar senha" : "Mostrar senha"}
+                          >
+                            {showSetupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor="setup-confirm-password"
+                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
+                        >
+                          Confirmar senha
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="setup-confirm-password"
+                            type={showSetupConfirm ? "text" : "password"}
+                            value={setupConfirmPassword}
+                            onChange={(event) => setSetupConfirmPassword(event.currentTarget.value)}
+                            autoComplete="new-password"
+                            placeholder="••••••••"
+                            className="h-12 pr-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowSetupConfirm((current) => !current)}
+                            className="absolute inset-y-0 right-0 flex items-center px-3 text-[#c89a94] transition-colors hover:text-[#fff2ef]"
+                            aria-label={showSetupConfirm ? "Ocultar confirmação" : "Mostrar confirmação"}
+                          >
+                            {showSetupConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {setPasswordMutation.isError ? (
+                        <p className="text-sm text-[#ff5b6f]">
+                          Nao foi possivel definir a senha.
+                        </p>
+                      ) : null}
+
+                      <Button
+                        type="submit"
+                        disabled={
+                          setPasswordMutation.isPending ||
+                          !setupPassword ||
+                          !setupConfirmPassword
+                        }
+                        className="h-12 w-full rounded-md bg-[#ff243f] text-[0.95rem] font-bold uppercase tracking-[0.14em] text-white shadow-[0_10px_28px_-10px_rgba(255,36,63,0.95)] transition-transform duration-200 hover:-translate-y-px hover:bg-[#ff3a52]"
+                      >
+                        {setPasswordMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Definir senha"
+                        )}
+                      </Button>
+                    </form>
                   </div>
                 ) : user ? (
                   <div className="flex h-[26rem] items-center justify-center">
@@ -511,11 +636,19 @@ function resolveReturnTo() {
 
 function resolveInitialToastMessage(
   isRegister: boolean,
+  isPasswordSetup: boolean,
   provider: string | null,
   toast: string | null
 ) {
   if (toast) {
     return toast;
+  }
+
+  if (isPasswordSetup) {
+    const providerName = resolveProviderLabel(provider ?? "");
+    return providerName
+      ? `Conta criada com ${providerName}. Defina sua senha para finalizar.`
+      : "Sua conta foi criada. Defina sua senha para finalizar.";
   }
 
   if (!isRegister || !provider) {

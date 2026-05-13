@@ -25,6 +25,7 @@ export type PlatformUserRepository = {
     provider: OAuthProvider;
     externalAccountId: string;
   }): Promise<PlatformUser>;
+  updatePassword(userId: number, passwordHash: string): Promise<void>;
   updateLastLogin(userId: number): Promise<void>;
 };
 
@@ -166,6 +167,15 @@ export function createPlatformUserRepository(
       await client`
         update "User"
         set last_login_at = now(),
+            updated_at = now()
+        where id = ${userId}
+      `;
+    },
+
+    async updatePassword(userId: number, passwordHash: string) {
+      await client`
+        update "User"
+        set password_hash = ${passwordHash},
             updated_at = now()
         where id = ${userId}
       `;

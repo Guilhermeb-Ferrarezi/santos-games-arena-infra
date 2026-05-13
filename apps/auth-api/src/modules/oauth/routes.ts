@@ -97,10 +97,66 @@ export function registerOAuthRoutes(
 
     if (!user) {
       if (oauthState.entry === "register") {
-        return reply.redirect(buildRegisterUrl(env, oauthState.returnTo, profile));
+        const existingUserByEmail = await dependencies.users.findByIdentifier(profile.email);
+        const existingUserByLogin =
+          profile.login === profile.email
+            ? existingUserByEmail
+            : await dependencies.users.findByIdentifier(profile.login);
+
+        if (existingUserByEmail || existingUserByLogin) {
+          return reply.redirect(buildLoginUrl(env, "Já existe uma conta com este email ou usuário. Use login."));
+        }
+
+        user = await dependencies.users.createOAuthUser({
+          email: profile.email,
+          login: profile.login,
+          provider,
+          externalAccountId: profile.externalAccountId
+        });
+
+        await dependencies.externalAccounts.linkToUser({
+          provider,
+          externalAccountId: profile.externalAccountId,
+          email: profile.email,
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
+          userId: user.id
+        });
+
+        await dependencies.users.updateLastLogin(user.id);
+
+        const sessionId = createSessionId();
+        if (dependencies.sessions) {
+          await dependencies.sessions.create({
+            sessionId,
+            userId: user.id,
+            ttlSeconds: env.SESSION_TTL_SECONDS
+          });
+        }
+
+        const token = await createSessionToken(
+          {
+            userId: user.id,
+            email: user.email,
+            login: user.login,
+            sessionId
+          },
+          env
+        );
+
+        reply.setCookie(env.AUTH_COOKIE_NAME, token, {
+          domain: env.AUTH_COOKIE_DOMAIN,
+          httpOnly: true,
+          maxAge: env.SESSION_TTL_SECONDS,
+          path: "/",
+          sameSite: "lax",
+          secure: env.NODE_ENV === "production"
+        });
+
+        return reply.redirect(buildPasswordSetupUrl(env, oauthState.returnTo, profile));
       }
 
-      return reply.redirect(resolvePublicUrl(env));
+      return reply.redirect(buildLoginUrl(env));
     }
 
     if (!user.isActive) {
@@ -144,7 +200,7 @@ export function registerOAuthRoutes(
   });
 }
 
-function buildRegisterUrl(
+function buildPasswordSetupUrl(
   env: Pick<AuthApiEnv, "AUTH_PUBLIC_URL">,
   returnTo: string,
   profile: {
@@ -156,13 +212,12 @@ function buildRegisterUrl(
     avatarUrl?: string;
   }
 ) {
-  const url = new URL("/register", resolvePublicUrl(env));
+  const url = new URL("/set-password", resolvePublicUrl(env));
   url.searchParams.set("provider", profile.provider);
-  url.searchParams.set("externalAccountId", profile.externalAccountId);
   url.searchParams.set("email", profile.email);
   url.searchParams.set("login", profile.login);
   url.searchParams.set("returnTo", returnTo);
-  url.searchParams.set("toast", `Nenhuma conta vinculada ao ${providerLabel(profile.provider)}. Crie uma conta para continuar.`);
+  url.searchParams.set("toast", `Conta criada com ${providerLabel(profile.provider)}. Defina sua senha para finalizar.`);
 
   if (profile.displayName) {
     url.searchParams.set("displayName", profile.displayName);
@@ -170,6 +225,19 @@ function buildRegisterUrl(
 
   if (profile.avatarUrl) {
     url.searchParams.set("avatarUrl", profile.avatarUrl);
+  }
+
+  return url.toString();
+}
+
+function buildLoginUrl(
+  env: Pick<AuthApiEnv, "AUTH_PUBLIC_URL">,
+  toast?: string
+) {
+  const url = new URL("/", resolvePublicUrl(env));
+
+  if (toast) {
+    url.searchParams.set("toast", toast);
   }
 
   return url.toString();

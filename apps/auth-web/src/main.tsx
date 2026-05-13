@@ -20,8 +20,13 @@ const registerRoute = createRoute({
   path: "/register",
   component: () => <AuthApp />
 });
+const setPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/set-password",
+  component: () => <AuthApp />
+});
 const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, registerRoute])
+  routeTree: rootRoute.addChildren([indexRoute, registerRoute, setPasswordRoute])
 });
 
 declare module "@tanstack/react-router" {

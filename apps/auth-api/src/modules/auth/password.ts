@@ -7,16 +7,23 @@ export async function verifyPassword(
   passwordHash: string,
   env: Pick<AuthApiEnv, "JWT_SECRET">
 ): Promise<boolean> {
-  if (passwordHash.startsWith("$2a$") || passwordHash.startsWith("$2b$") || passwordHash.startsWith("$2y$")) {
-    return Bun.password.verify(password, passwordHash);
-  }
-
   if (passwordHash.startsWith("sha256:")) {
     const expectedHash = await createLegacyPasswordHash(password, env.JWT_SECRET);
     return timingSafeEqual(passwordHash, expectedHash);
   }
 
-  return false;
+  try {
+    return await Bun.password.verify(password, passwordHash);
+  } catch {
+    return false;
+  }
+}
+
+export async function createPasswordHash(password: string): Promise<string> {
+  return Bun.password.hash(password, {
+    algorithm: "bcrypt",
+    cost: 10
+  });
 }
 
 export async function createLegacyPasswordHash(

@@ -39,6 +39,10 @@ export async function register(input: {
   return loginResponseSchema.parse(response.data);
 }
 
+export async function setPassword(input: { password: string }) {
+  await api.post("/api/auth/password", input);
+}
+
 export async function logout() {
   await api.post("/api/auth/logout");
 }
