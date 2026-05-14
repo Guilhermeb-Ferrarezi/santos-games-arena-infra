@@ -10,6 +10,7 @@ import { createSessionId, type SessionStore } from "../session/session-store";
 import type { OAuthProvider } from "./providers";
 import type { PlatformUserRepository } from "../users/platform-user-repository";
 import { needsPasswordSetup } from "../auth/password";
+import type { AuthEventLogger } from "../logs/auth-event-logger";
 
 export function registerOAuthRoutes(
   server: FastifyInstance,
@@ -31,6 +32,7 @@ export function registerOAuthRoutes(
     oauthClient?: OAuthClient;
     sessions?: SessionStore;
     users?: PlatformUserRepository;
+    authEvents?: AuthEventLogger;
   }
 ) {
   server.get("/oauth/:provider/start", async (request, reply) => {
@@ -58,6 +60,7 @@ export function registerOAuthRoutes(
   });
 
   server.get("/oauth/:provider/callback", async (request, reply) => {
+    const startedAt = Date.now();
     const { provider } = request.params as { provider: string };
     const query = request.query as Record<string, string | string[] | undefined>;
 
@@ -139,6 +142,13 @@ export function registerOAuthRoutes(
         });
 
         await dependencies.users.updateLastLogin(user.id);
+        await recordAuthEvent(dependencies.authEvents, {
+          request,
+          startedAt,
+          event: "oauth_register",
+          provider,
+          user
+        });
 
         const sessionId = createSessionId();
         if (dependencies.sessions) {
@@ -185,6 +195,13 @@ export function registerOAuthRoutes(
 
     if (needsPasswordSetup(user.passwordHash)) {
       await dependencies.users.updateLastLogin(user.id);
+      await recordAuthEvent(dependencies.authEvents, {
+        request,
+        startedAt,
+        event: "oauth_login",
+        provider,
+        user
+      });
 
       const sessionId = createSessionId();
       if (dependencies.sessions) {
@@ -227,6 +244,13 @@ export function registerOAuthRoutes(
     }
 
     await dependencies.users.updateLastLogin(user.id);
+    await recordAuthEvent(dependencies.authEvents, {
+      request,
+      startedAt,
+      event: "oauth_login",
+      provider,
+      user
+    });
 
     const sessionId = createSessionId();
     if (dependencies.sessions) {
@@ -394,4 +418,19 @@ function providerLabel(provider: OAuthProvider) {
 
 function resolvePublicUrl(env: Pick<AuthApiEnv, "AUTH_PUBLIC_URL">) {
   return (env.AUTH_PUBLIC_URL ?? "http://localhost:3001").replace(/\/+$/, "");
+}
+
+async function recordAuthEvent(
+  authEvents: AuthEventLogger | undefined,
+  input: Parameters<AuthEventLogger["record"]>[0]
+) {
+  if (!authEvents) {
+    return;
+  }
+
+  try {
+    await authEvents.record(input);
+  } catch {
+    // Auth must keep flowing even if logging fails.
+  }
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parseAuthApiEnv } from "../src/config/env";
 import { createPasswordHash } from "../src/modules/auth/password";
+import type { AuthEventLogger } from "../src/modules/logs/auth-event-logger";
 import type { ExternalAuthAccountRepository } from "../src/modules/oauth/external-auth-account-repository";
 import type { OAuthClient } from "../src/modules/oauth/oauth-client";
 import type { PlatformUserRepository } from "../src/modules/users/platform-user-repository";
@@ -38,6 +39,7 @@ describe("oauth routes", () => {
 
   test("callback logs in linked user and sets session cookie", async () => {
     const users = createUsersRepository();
+    const authEvents = createAuthEventsLogger();
     const linkedUser = {
       id: 1,
       email: "player@santos-games.com",
@@ -57,7 +59,8 @@ describe("oauth routes", () => {
       env,
       externalAccounts,
       oauthClient,
-      users
+      users,
+      authEvents
     });
 
     const start = await server.inject({
@@ -79,6 +82,9 @@ describe("oauth routes", () => {
     expect(response.headers.location).toBe("https://santos-games.com");
     expect(setCookie).toContain("sg_auth=");
     expect(externalAccounts.linked.length).toBe(0);
+    expect(authEvents.calls).toHaveLength(1);
+    expect(authEvents.calls[0]?.event).toBe("oauth_login");
+    expect(authEvents.calls[0]?.provider).toBe("google");
 
     await server.close();
   });
@@ -129,6 +135,7 @@ describe("oauth routes", () => {
 
   test("callback from register flow creates user and redirects to password setup", async () => {
     const users = createUsersRepository();
+    const authEvents = createAuthEventsLogger();
     const externalAccounts = createExternalAccountsRepository();
     const oauthClient = createOAuthClient({
       provider: "google",
@@ -141,7 +148,8 @@ describe("oauth routes", () => {
       env,
       externalAccounts,
       oauthClient,
-      users
+      users,
+      authEvents
     });
 
     const start = await server.inject({
@@ -163,6 +171,9 @@ describe("oauth routes", () => {
     expect(new URL(String(response.headers.location)).searchParams.get("provider")).toBe("google");
     expect(externalAccounts.linked).toHaveLength(1);
     expect(await users.findByIdentifier("player@santos-games.com")).not.toBeNull();
+    expect(authEvents.calls).toHaveLength(1);
+    expect(authEvents.calls[0]?.event).toBe("oauth_register");
+    expect(authEvents.calls[0]?.provider).toBe("google");
 
     await server.close();
   });
@@ -307,6 +318,7 @@ describe("oauth routes", () => {
 
   test("steam callback logs in linked user without requiring code param", async () => {
     const users = createUsersRepository();
+    const authEvents = createAuthEventsLogger();
     const linkedUser = {
       id: 1,
       email: "player@santos-games.com",
@@ -326,7 +338,8 @@ describe("oauth routes", () => {
       env,
       externalAccounts,
       oauthClient,
-      users
+      users,
+      authEvents
     });
 
     const start = await server.inject({
@@ -355,6 +368,9 @@ describe("oauth routes", () => {
     expect(response.statusCode).toBe(302);
     expect(response.headers.location).toBe("https://santos-games.com");
     expect(setCookie).toContain("sg_auth=");
+    expect(authEvents.calls).toHaveLength(1);
+    expect(authEvents.calls[0]?.event).toBe("oauth_login");
+    expect(authEvents.calls[0]?.provider).toBe("steam");
 
     await server.close();
   });
@@ -435,5 +451,20 @@ function createOAuthClient(profile: Awaited<ReturnType<OAuthClient["exchangeCode
     async exchangeSteamOpenId() {
       return profile as Awaited<ReturnType<OAuthClient["exchangeSteamOpenId"]>>;
     }
+  };
+}
+
+function createAuthEventsLogger(): AuthEventLogger & { calls: Array<{ event: string; provider: string }> } {
+  const calls: Array<{ event: string; provider: string }> = [];
+
+  return {
+    calls,
+    async record(input) {
+      calls.push({
+        event: input.event,
+        provider: input.provider
+      });
+    },
+    async close() {}
   };
 }

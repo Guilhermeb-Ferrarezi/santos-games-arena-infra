@@ -6,6 +6,7 @@ import Fastify from "fastify";
 
 import type { AuthApiEnv } from "./config/env";
 import { checkDependencies, type DependencyPingers } from "./infra/dependencies";
+import { createAuthEventLogger } from "./modules/logs/auth-event-logger";
 import { createHttpLogUserResolver } from "./modules/logs/http-log-user-resolver";
 import { registerAuthRoutes } from "./modules/auth/routes";
 import type { ExternalAuthAccountRepository } from "./modules/oauth/external-auth-account-repository";
@@ -26,10 +27,11 @@ export type AuthApiServerOptions = {
   oauthClient?: OAuthClient;
   users?: PlatformUserRepository;
   sessions?: SessionStore;
+  authEvents?: ReturnType<typeof createAuthEventLogger>;
 };
 
 export function createAuthApiServer(options: AuthApiServerOptions = {}) {
-  const { dependencies, env, externalAccounts, oauthClient, sessions, users } = options;
+  const { dependencies, env, externalAccounts, oauthClient, sessions, users, authEvents } = options;
   const server = Fastify({
     logger: env?.NODE_ENV === "production"
   });
@@ -74,6 +76,18 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
         : undefined
     });
   }
+
+  const resolvedAuthEvents =
+    authEvents ??
+    createAuthEventLogger({
+      LOGS_MONGO_URL: env?.LOGS_MONGO_URL,
+      LOGS_MONGO_DB_NAME: env?.LOGS_MONGO_DB_NAME,
+      LOGS_HTTP_COLLECTION: env?.LOGS_HTTP_COLLECTION
+    });
+
+  server.addHook("onClose", async () => {
+    await resolvedAuthEvents.close();
+  });
 
   server.register(registerOpenApi, {
     prefix: API_PREFIX
@@ -156,7 +170,8 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
             externalAccounts,
             oauthClient,
             sessions,
-            users
+            users,
+            authEvents: resolvedAuthEvents
           }
         );
       },
@@ -165,20 +180,16 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
   }
 
   if (dependencies) {
-    try {
-      server.get(`${API_PREFIX}/health/dependencies`, async (_request, reply) => {
+    server.get(`${API_PREFIX}/health/dependencies`, async (_request, reply) => {
       const health = await checkDependencies(dependencies);
-      
 
       if (health.status === "degraded") {
         reply.code(503);
       }
+
       return health;
     });
-    }catch(err){console.error(`erro ao rodar: ${err}`);
-    }
-
-    
   }
+
   return server;
 }

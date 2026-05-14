@@ -64,6 +64,12 @@ export type MongoHttpLoggingOptions = {
   resolveUser?: (request: HttpLogRequest) => MaybePromise<HttpLogUser | null | undefined>;
 };
 
+export type MongoDocumentWriterOptions = {
+  mongoUrl?: string;
+  dbName?: string;
+  collectionName?: string;
+};
+
 export type HttpLoggingHookHost = {
   addHook: (name: string, handler: (...args: unknown[]) => unknown) => unknown;
 };
@@ -203,10 +209,23 @@ function createMongoHttpLogWriter(options: MongoHttpLoggingOptions) {
   const mongoUrl = options.mongoUrl?.trim();
   const collectionName = options.collectionName?.trim();
   const dbName = options.dbName?.trim() || DEFAULT_DB_NAME;
+  return createMongoDocumentWriter({
+    mongoUrl,
+    dbName,
+    collectionName
+  });
+}
+
+export function createMongoDocumentWriter<TDocument extends Document>(
+  options: MongoDocumentWriterOptions
+) {
+  const mongoUrl = options.mongoUrl?.trim();
+  const collectionName = options.collectionName?.trim();
+  const dbName = options.dbName?.trim() || DEFAULT_DB_NAME;
 
   if (!mongoUrl || !collectionName) {
     return {
-      async insert(_document: HttpLogDocument) {},
+      async insert(_document: TDocument) {},
       async close() {}
     };
   }
@@ -220,11 +239,11 @@ function createMongoHttpLogWriter(options: MongoHttpLoggingOptions) {
     }
 
     await connectPromise;
-    return client.db(dbName).collection<HttpLogDocument>(collectionName);
+    return client.db(dbName).collection<TDocument>(collectionName);
   }
 
   return {
-    async insert(document: HttpLogDocument) {
+    async insert(document: TDocument) {
       try {
         const collection = await getCollection();
         await collection.insertOne(document);
