@@ -1,22 +1,58 @@
 @import "tailwindcss";
 
-@theme {
-  --color-background: #f7f7f5;
-  --color-foreground: #1f2328;
-  --color-card: #ffffff;
-  --color-card-foreground: #1f2328;
-  --color-primary: #18715f;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #e8ece9;
-  --color-secondary-foreground: #26312d;
-  --color-muted: #ecefed;
-  --color-muted-foreground: #69736f;
-  --color-accent: #e2ece8;
-  --color-accent-foreground: #163c34;
-  --color-destructive: #b42318;
-  --color-border: #d9dedb;
-  --color-input: #cdd5d1;
-  --color-ring: #18715f;
+@theme inline {
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-destructive: var(--destructive);
+  --font-display: "Barlow Condensed", "Orbitron", sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --radius: 0rem;
+
+  --background: oklch(0.17 0.008 250);
+  --surface-1:  oklch(0.20 0.008 250);
+  --surface-2:  oklch(0.24 0.008 250);
+  --surface-3:  oklch(0.28 0.008 250);
+
+  --foreground: oklch(0.97 0.005 250);
+  --card: oklch(0.24 0.008 250);
+  --card-foreground: oklch(0.97 0.005 250);
+
+  --primary: oklch(0.62 0.21 22);
+  --primary-foreground: oklch(0.98 0.005 250);
+
+  --muted: oklch(0.26 0.008 250);
+  --muted-foreground: oklch(0.78 0.01 250);
+
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.98 0.005 250);
+
+  --border: oklch(0.34 0.008 250 / 0.6);
+  --input: oklch(0.26 0.008 250);
+  --ring: oklch(0.62 0.21 22);
+
+  --success: oklch(0.72 0.18 150);
+  --warning: oklch(0.85 0.18 80);
 }
 
 * {
@@ -25,11 +61,34 @@
 
 body {
   margin: 0;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-weight: 500;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
 button,
 input {
   font: inherit;
+}
+
+@layer utilities {
+  .ds-card {
+    @apply border border-white/[0.06] transition-all;
+    background: var(--surface-2);
+  }
+  .ds-card:hover {
+    @apply border-white/10;
+    background: var(--surface-3);
+  }
 }

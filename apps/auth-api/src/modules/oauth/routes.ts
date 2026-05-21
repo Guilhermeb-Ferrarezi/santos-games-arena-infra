@@ -11,6 +11,8 @@ import type { OAuthProvider } from "./providers";
 import type { PlatformUserRepository } from "../users/platform-user-repository";
 import { needsPasswordSetup } from "../auth/password";
 import type { AuthEventLogger } from "../logs/auth-event-logger";
+import type { AuthClientRepository } from "../clients/client-repository";
+import { resolveClientRedirect } from "../clients/validate-redirect";
 
 export function registerOAuthRoutes(
   server: FastifyInstance,
@@ -33,11 +35,17 @@ export function registerOAuthRoutes(
     sessions?: SessionStore;
     users?: PlatformUserRepository;
     authEvents?: AuthEventLogger;
+    authClients?: AuthClientRepository;
   }
 ) {
   server.get("/oauth/:provider/start", async (request, reply) => {
     const { provider } = request.params as { provider: string };
-    const query = request.query as { returnTo?: string; entry?: string };
+    const query = request.query as {
+      returnTo?: string;
+      entry?: string;
+      client_id?: string;
+      redirect_uri?: string;
+    };
 
     if (!isOAuthProvider(provider)) {
       return reply.code(404).send({
@@ -46,8 +54,36 @@ export function registerOAuthRoutes(
       });
     }
 
+    let validatedRedirectUri: string | undefined;
+    let validatedClientId: string | undefined;
+    if (query.client_id || query.redirect_uri) {
+      if (!dependencies?.authClients) {
+        return reply.code(503).send({
+          error: "clients_not_ready",
+          message: "Validacao de aplicacao indisponivel."
+        });
+      }
+
+      const result = await resolveClientRedirect(dependencies.authClients, {
+        clientId: query.client_id,
+        redirectUri: query.redirect_uri
+      });
+
+      if (!result.ok) {
+        return reply.code(400).send({ error: result.error.reason });
+      }
+
+      validatedClientId = result.resolved.client.clientId;
+      validatedRedirectUri = result.resolved.redirectUri;
+    }
+
     const entry = query.entry === "login" || query.entry === "register" ? query.entry : undefined;
-    const state = await createOAuthState(provider, env, query.returnTo, entry);
+    const state = await createOAuthState(provider, env, {
+      returnTo: query.returnTo,
+      entry,
+      clientId: validatedClientId,
+      redirectUri: validatedRedirectUri
+    });
 
     try {
       return reply.redirect(buildOAuthAuthorizationUrl(provider, env, state));
@@ -178,11 +214,19 @@ export function registerOAuthRoutes(
           secure: env.NODE_ENV === "production"
         });
 
-        return reply.redirect(buildPasswordSetupUrl(env, oauthState.returnTo, profile));
+        return reply.redirect(
+          buildPasswordSetupUrl(env, oauthState.returnTo, profile, {
+            clientId: oauthState.clientId,
+            redirectUri: oauthState.redirectUri
+          })
+        );
       }
 
       return reply.redirect(
-        buildRegisterUrl(env, oauthState.returnTo, profile, providerLabel(provider))
+        buildRegisterUrl(env, oauthState.returnTo, profile, providerLabel(provider), {
+          clientId: oauthState.clientId,
+          redirectUri: oauthState.redirectUri
+        })
       );
     }
 
@@ -232,14 +276,22 @@ export function registerOAuthRoutes(
       });
 
       return reply.redirect(
-        buildPasswordSetupUrl(env, oauthState.returnTo, {
-          provider,
-          externalAccountId: profile.externalAccountId,
-          email: user.email,
-          login: user.login,
-          displayName: profile.displayName,
-          avatarUrl: profile.avatarUrl
-        })
+        buildPasswordSetupUrl(
+          env,
+          oauthState.returnTo,
+          {
+            provider,
+            externalAccountId: profile.externalAccountId,
+            email: user.email,
+            login: user.login,
+            displayName: profile.displayName,
+            avatarUrl: profile.avatarUrl
+          },
+          {
+            clientId: oauthState.clientId,
+            redirectUri: oauthState.redirectUri
+          }
+        )
       );
     }
 
@@ -280,7 +332,7 @@ export function registerOAuthRoutes(
       secure: env.NODE_ENV === "production"
     });
 
-    return reply.redirect(oauthState.returnTo);
+    return reply.redirect(oauthState.redirectUri ?? oauthState.returnTo);
   });
 }
 
@@ -332,7 +384,8 @@ function buildPasswordSetupUrl(
     login: string;
     displayName?: string;
     avatarUrl?: string;
-  }
+  },
+  clientFlow?: { clientId?: string; redirectUri?: string }
 ) {
   const url = new URL("/set-password", resolvePublicUrl(env));
   url.searchParams.set("provider", profile.provider);
@@ -350,6 +403,13 @@ function buildPasswordSetupUrl(
 
   if (profile.avatarUrl) {
     url.searchParams.set("avatarUrl", profile.avatarUrl);
+  }
+
+  if (clientFlow?.clientId) {
+    url.searchParams.set("client_id", clientFlow.clientId);
+  }
+  if (clientFlow?.redirectUri) {
+    url.searchParams.set("redirect_uri", clientFlow.redirectUri);
   }
 
   return url.toString();
@@ -378,7 +438,8 @@ function buildRegisterUrl(
     displayName?: string;
     avatarUrl?: string;
   },
-  providerName?: string | null
+  providerName?: string | null,
+  clientFlow?: { clientId?: string; redirectUri?: string }
 ) {
   const url = new URL("/register", resolvePublicUrl(env));
   url.searchParams.set("returnTo", returnTo);
@@ -392,6 +453,13 @@ function buildRegisterUrl(
 
   if (profile.avatarUrl) {
     url.searchParams.set("avatarUrl", profile.avatarUrl);
+  }
+
+  if (clientFlow?.clientId) {
+    url.searchParams.set("client_id", clientFlow.clientId);
+  }
+  if (clientFlow?.redirectUri) {
+    url.searchParams.set("redirect_uri", clientFlow.redirectUri);
   }
 
   url.searchParams.set(

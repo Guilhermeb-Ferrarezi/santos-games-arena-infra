@@ -1,23 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Mail, User as UserIcon } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   getSession,
   login,
+  lookupClient,
   register as registerUser,
   setPassword as submitPasswordSetup,
   startOAuth
 } from "@/lib/api";
 
 const mainSiteUrl = "https://santos-games.com";
-const allowedReturnToHosts = new Set(["santos-games.com", "www.santos-games.com"]);
 const MIN_PASSWORD_LENGTH = 8;
 
 type Provider = {
@@ -43,9 +42,9 @@ export function AuthApp() {
   const oauthDisplayName = searchParams.get("displayName") ?? "";
   const oauthAvatarUrl = searchParams.get("avatarUrl") ?? "";
   const toast = searchParams.get("toast");
-  const [toastMessage, setToastMessage] = useState<string | null>(
-    resolveInitialToastMessage(isRegister, isPasswordSetup, provider, toast)
-  );
+  const clientIdParam = searchParams.get("client_id");
+  const redirectUriParam = searchParams.get("redirect_uri");
+  const hasClientFlow = Boolean(clientIdParam && redirectUriParam);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [registerEmail, setRegisterEmail] = useState(oauthEmail);
@@ -57,40 +56,82 @@ export function AuthApp() {
   const [showSetupPassword, setShowSetupPassword] = useState(false);
   const [showSetupConfirm, setShowSetupConfirm] = useState(false);
 
+  const clientLookup = useQuery({
+    queryKey: ["client", clientIdParam, redirectUriParam],
+    queryFn: () => lookupClient({ clientId: clientIdParam!, redirectUri: redirectUriParam! }),
+    enabled: hasClientFlow,
+    retry: false
+  });
+  const clientFlow = clientLookup.data
+    ? { clientId: clientLookup.data.clientId, redirectUri: clientLookup.data.redirectUri }
+    : undefined;
+  const clientName = clientLookup.data?.name ?? null;
+  const clientFlowError = hasClientFlow && clientLookup.isError;
+
+  const [toastMessage, setToastMessage] = useState<string | null>(
+    resolveInitialToastMessage(isRegister, isPasswordSetup, provider, toast)
+  );
+
   const session = useQuery({
     queryKey: ["session"],
     queryFn: getSession,
     retry: false
   });
+  const finalRedirectUri = clientFlow?.redirectUri ?? resolveReturnTo();
   const loginMutation = useMutation({
     mutationFn: login,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["session"] })
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["session"] });
+      if (data.redirectUri) {
+        window.location.replace(data.redirectUri);
+      }
+    }
   });
   const registerMutation = useMutation({
     mutationFn: registerUser,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["session"] })
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["session"] });
+      if (data.redirectUri) {
+        window.location.replace(data.redirectUri);
+      }
+    }
   });
   const setPasswordMutation = useMutation({
     mutationFn: submitPasswordSetup,
-    onSuccess: () => window.location.replace(returnTo)
+    onSuccess: (data) => window.location.replace(data.redirectUri ?? finalRedirectUri)
   });
   const user = session.data?.authenticated ? session.data.user : null;
   const needsPasswordSetup = session.data?.needsPasswordSetup ?? false;
-  const returnTo = resolveReturnTo();
 
   useEffect(() => {
+    if (hasClientFlow && clientLookup.isLoading) {
+      return;
+    }
+
     if (user && needsPasswordSetup && !isPasswordSetup) {
       const url = new URL("/set-password", window.location.origin);
-      url.searchParams.set("returnTo", returnTo);
+      url.searchParams.set("returnTo", finalRedirectUri);
+      if (clientFlow) {
+        url.searchParams.set("client_id", clientFlow.clientId);
+        url.searchParams.set("redirect_uri", clientFlow.redirectUri);
+      }
       url.searchParams.set("toast", "Sua conta ainda nao possui senha. Defina uma senha para continuar.");
       window.location.replace(url.toString());
       return;
     }
 
     if (user && !needsPasswordSetup && !isPasswordSetup) {
-      window.location.replace(returnTo);
+      window.location.replace(finalRedirectUri);
     }
-  }, [isPasswordSetup, needsPasswordSetup, returnTo, user]);
+  }, [
+    clientFlow,
+    clientLookup.isLoading,
+    finalRedirectUri,
+    hasClientFlow,
+    isPasswordSetup,
+    needsPasswordSetup,
+    user
+  ]);
 
   useEffect(() => {
     if (isPasswordSetup && !session.isLoading && !user) {
@@ -109,7 +150,7 @@ export function AuthApp() {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    loginMutation.mutate({ identifier, password });
+    loginMutation.mutate({ identifier, password, ...(clientFlow ?? {}) });
   };
 
   const onIdentifierChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -139,7 +180,8 @@ export function AuthApp() {
       password: registerPassword,
       provider: provider ?? undefined,
       displayName: oauthDisplayName || undefined,
-      avatarUrl: oauthAvatarUrl || undefined
+      avatarUrl: oauthAvatarUrl || undefined,
+      ...(clientFlow ?? {})
     });
   };
 
@@ -173,328 +215,339 @@ export function AuthApp() {
     }
 
     setPasswordMutation.mutate({
-      password: setupPassword
+      password: setupPassword,
+      ...(clientFlow ?? {})
     });
   };
 
+  const isLoadingShell = session.isLoading || clientLookup.isLoading;
+  const headlineWord1 = isPasswordSetup ? "Definir" : isRegister ? "Criar" : "Entrar na";
+  const headlineWord2 = isPasswordSetup ? "Senha" : isRegister ? "Conta" : "Arena";
+  const subtitle = isPasswordSetup
+    ? "Sua conta ainda não possui senha. Defina uma senha para continuar."
+    : isRegister
+      ? "Finalize seu cadastro com email, usuário e senha."
+      : "Inicie sua sessão competitiva";
+
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-[#150707] text-[#f7f1ef]">
+    <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-80"
+        className="pointer-events-none absolute inset-0 opacity-[0.05]"
         style={{
           backgroundImage:
-            "radial-gradient(circle at center, rgba(167, 0, 18, 0.28) 0, rgba(167, 0, 18, 0.14) 18%, rgba(21, 7, 7, 0) 55%), linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)",
-          backgroundSize: "100% 100%, 48px 48px, 48px 48px",
-          backgroundPosition: "center, center, center"
+            "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+          backgroundSize: "48px 48px"
         }}
       />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
-          boxShadow:
-            "inset 0 0 160px rgba(0, 0, 0, 0.55), inset 0 0 240px rgba(190, 10, 30, 0.15)"
+          background:
+            "radial-gradient(circle at 50% 50%, oklch(0.62 0.21 22 / 0.06), transparent 70%)"
         }}
       />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 select-none text-[15rem] font-black italic uppercase tracking-tighter text-white/[0.012] md:text-[25rem]"
+           style={{ fontFamily: "var(--font-display)" }}>
+        Access
+      </div>
 
-      <div className="relative z-10 flex min-h-dvh flex-col items-center px-4 py-6 sm:px-6">
+      <div className="relative z-10 flex min-h-dvh flex-col items-center px-4 py-10 sm:px-6">
         <div className="flex w-full flex-1 flex-col items-center justify-center">
           <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.99 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.35, delay: 0.05 }}
-            className="w-full max-w-[440px]"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="group relative w-full max-w-md"
           >
+            <div className="absolute -top-4 -left-4 h-8 w-8 border-t border-l border-white/10 transition-colors group-hover:border-primary/40" />
+            <div className="absolute -bottom-4 -right-4 h-8 w-8 border-b border-r border-white/10 transition-colors group-hover:border-primary/40" />
+
             {toastMessage ? (
-              <div className="mb-4 rounded-md border border-[#29c36a]/35 bg-[#11261a]/95 px-4 py-3 text-sm text-[#d8ffe7] shadow-[0_14px_40px_rgba(0,0,0,0.35)]">
+              <div className="mb-4 border border-success/35 bg-[oklch(0.24_0.04_150)]/40 px-4 py-3 text-sm text-[oklch(0.92_0.10_150)] backdrop-blur-md">
                 {toastMessage}
               </div>
             ) : null}
 
-            <div className="mb-8 flex justify-center">
-              <img
-                src="/sga-logo.png"
-                alt="Santos Games Arena"
-                className="h-[72px] w-auto select-none drop-shadow-[0_0_24px_rgba(255,255,255,0.22)] sm:h-[80px]"
-              />
-            </div>
+            {clientFlowError ? (
+              <div className="mb-4 border border-destructive/45 bg-destructive/10 px-4 py-3 text-sm text-[oklch(0.88_0.10_25)] backdrop-blur-md">
+                Aplicação ou redirect_uri inválidos. Volte para o app que te enviou aqui.
+              </div>
+            ) : null}
 
-            <Card
-              className="relative overflow-hidden rounded-[14px] border border-white/10 bg-[#2a1212]/80 px-6 py-8 text-[#f5e9e6] shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_0_0_1px_rgba(0,0,0,0.5),0_20px_80px_rgba(0,0,0,0.45),0_0_60px_rgba(180,0,20,0.28)] backdrop-blur-xl sm:px-8"
+            <form
+              onSubmit={isRegister ? onRegisterSubmit : isPasswordSetup ? onSetupPasswordSubmit : onSubmit}
+              className="relative overflow-hidden border border-white/5 bg-[var(--surface-2)]/85 p-8 shadow-2xl backdrop-blur-md"
             >
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-[#ff2642] to-transparent"
-              />
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-[14px]"
-                style={{
-                  boxShadow:
-                    "inset 0 0 0 1px rgba(255,255,255,0.03), inset 0 0 42px rgba(255, 18, 50, 0.07)"
-                }}
-              />
+              <div className="mb-8 flex justify-center border-b border-white/10 pb-6">
+                <img
+                  src="/sga-logo.png"
+                  alt="Santos Games"
+                  className="h-14 w-auto select-none"
+                />
+              </div>
 
-              <div className="relative">
-                <header className="text-center">
-                  <h1 className="text-[1.65rem] font-bold tracking-tight text-[#faf4f2] sm:text-[1.75rem]">
-                    {isRegister ? (
-                      <>Crie sua <span className="text-[#ff243f]">Conta</span></>
-                    ) : (
-                      <>Entre na <span className="text-[#ff243f]">Arena</span></>
-                    )}
-                  </h1>
-                  <p className="mt-2 text-sm text-[#bca7a3]">
-                    {isPasswordSetup
-                      ? "Sua conta ainda nao possui senha. Defina uma senha para continuar."
-                      : isRegister
-                        ? "Finalize seu cadastro com email, usuario e senha."
-                        : "Acesse sua conta com um provedor ou email."}
-                  </p>
-                </header>
+              <h1 className="mb-2 text-3xl text-center font-black uppercase italic leading-none tracking-tight text-white"
+                  style={{ fontFamily: "var(--font-display)" }}>
+                {headlineWord1} <span className="text-primary">{headlineWord2}</span>
+              </h1>
+              <p className="mb-6 text-3 uppercase tracking-[0.2em] text-muted-foreground">
+                {subtitle}
+              </p>
 
-                {session.isLoading ? (
-                  <div className="flex h-[26rem] items-center justify-center">
-                    <Loader2 className="h-5 w-5 animate-spin text-[#ff243f]" />
-                  </div>
-                ) : isPasswordSetup ? (
-                  <div className="mt-8 space-y-5">
-                    <div className="rounded-md border border-white/8 bg-[#341515] px-4 py-3 text-sm text-[#f3dbd6]">
-                      <p className="font-semibold text-[#fff2ef]">
-                        Sua conta com {resolveProviderLabel(provider ?? "") ?? "OAuth"} ainda nao tem senha
-                      </p>
-                      <p className="mt-1 text-[#c7aba5]">
-                        {user
-                          ? `Logado como ${oauthDisplayName || oauthLogin || user.email}`
-                          : "Use uma senha para concluir seu cadastro."}
-                      </p>
-                      {provider ? (
-                        <div className="mt-3 flex items-center gap-3 rounded-md border border-white/8 bg-[#401919] px-3 py-2">
-                          {oauthAvatarUrl ? (
-                            <img
-                              src={oauthAvatarUrl}
-                              alt=""
-                              className="h-9 w-9 rounded-full border border-white/10 object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-[#2d1212] text-xs font-bold uppercase text-[#ff6a7b]">
-                              {resolveProviderLabel(provider)?.slice(0, 1) ?? "O"}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#fff2ef]">
-                              {oauthDisplayName || oauthLogin || user?.email || "Conta OAuth"}
-                            </p>
-                            <p className="text-xs text-[#c7aba5]">
-                              Origem: {resolveProviderLabel(provider)}
-                            </p>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
+              {clientName ? (
+                <div className="mb-6 flex items-center gap-2 border-l-2 border-primary bg-primary/[0.04] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-primary">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                  </span>
+                  Entrando em {clientName}
+                </div>
+              ) : null}
 
-                    <form className="space-y-4" onSubmit={onSetupPasswordSubmit}>
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="setup-password"
-                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
-                        >
-                          Senha
-                        </Label>
-                        <div className="relative">
-                          <Input
-                            id="setup-password"
-                            type={showSetupPassword ? "text" : "password"}
-                            value={setupPassword}
-                            onChange={(event) => setSetupPasswordValue(event.currentTarget.value)}
-                            autoComplete="new-password"
-                            placeholder="••••••••"
-                            className="h-12 pr-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowSetupPassword((current) => !current)}
-                            className="absolute inset-y-0 right-0 flex items-center px-3 text-[#c89a94] transition-colors hover:text-[#fff2ef]"
-                            aria-label={showSetupPassword ? "Ocultar senha" : "Mostrar senha"}
-                          >
-                            {showSetupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
-                        </div>
-                        <p className="text-xs text-[#b8928c]">
-                          Mínimo de {MIN_PASSWORD_LENGTH} caracteres.
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="setup-confirm-password"
-                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
-                        >
-                          Confirmar senha
-                        </Label>
-                        <div className="relative">
-                          <Input
-                            id="setup-confirm-password"
-                            type={showSetupConfirm ? "text" : "password"}
-                            value={setupConfirmPassword}
-                            onChange={(event) => setSetupConfirmPassword(event.currentTarget.value)}
-                            autoComplete="new-password"
-                            placeholder="••••••••"
-                            className="h-12 pr-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowSetupConfirm((current) => !current)}
-                            className="absolute inset-y-0 right-0 flex items-center px-3 text-[#c89a94] transition-colors hover:text-[#fff2ef]"
-                            aria-label={showSetupConfirm ? "Ocultar confirmação" : "Mostrar confirmação"}
-                          >
-                            {showSetupConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      {setPasswordMutation.isError ? (
-                        <p className="text-sm text-[#ff5b6f]">
-                          Nao foi possivel definir a senha.
-                        </p>
-                      ) : null}
-
-                      <Button
-                        type="submit"
-                        disabled={
-                          setPasswordMutation.isPending ||
-                          !setupPassword ||
-                          !setupConfirmPassword
-                        }
-                        className="h-12 w-full rounded-md bg-[#ff243f] text-[0.95rem] font-bold uppercase tracking-[0.14em] text-white shadow-[0_10px_28px_-10px_rgba(255,36,63,0.95)] transition-transform duration-200 hover:-translate-y-px hover:bg-[#ff3a52]"
-                      >
-                        {setPasswordMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+              {isLoadingShell || (user && !isPasswordSetup) ? (
+                <div className="flex h-[22rem] items-center justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                </div>
+              ) : isPasswordSetup ? (
+                <div className="space-y-5">
+                  <div className="border border-white/10 bg-[var(--surface-1)] px-4 py-3 text-sm">
+                    <p className="font-bold text-white">
+                      Sua conta com {resolveProviderLabel(provider ?? "") ?? "OAuth"} ainda não tem senha
+                    </p>
+                    <p className="mt-1 text-muted-foreground">
+                      {user
+                        ? `Logado como ${oauthDisplayName || oauthLogin || user.email}`
+                        : "Defina uma senha para concluir seu cadastro."}
+                    </p>
+                    {provider ? (
+                      <div className="mt-3 flex items-center gap-3 border border-white/10 bg-[var(--surface-2)] px-3 py-2">
+                        {oauthAvatarUrl ? (
+                          <img src={oauthAvatarUrl} alt="" className="h-9 w-9 border border-white/10 object-cover" />
                         ) : (
-                          "Definir senha"
+                          <div className="flex h-9 w-9 items-center justify-center border border-white/10 bg-[var(--surface-3)] text-xs font-bold uppercase text-primary">
+                            {resolveProviderLabel(provider)?.slice(0, 1) ?? "O"}
+                          </div>
                         )}
-                      </Button>
-                    </form>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-white">
+                            {oauthDisplayName || oauthLogin || user?.email || "Conta OAuth"}
+                          </p>
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            Origem: {resolveProviderLabel(provider)}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                ) : user ? (
-                  <div className="flex h-[26rem] items-center justify-center">
-                    <Loader2 className="h-5 w-5 animate-spin text-[#ff243f]" />
+
+                  <div>
+                    <Label htmlFor="setup-password" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">
+                      Chave de Acesso (Senha)
+                    </Label>
+                    <div className="relative">
+                      <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                      <Input
+                        id="setup-password"
+                        type={showSetupPassword ? "text" : "password"}
+                        value={setupPassword}
+                        onChange={(event) => setSetupPasswordValue(event.currentTarget.value)}
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        className="h-12 border-white/10 bg-white/5 pl-10 pr-12 text-white transition-all placeholder:text-white/10 focus:border-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSetupPassword((current) => !current)}
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-white"
+                        aria-label={showSetupPassword ? "Ocultar senha" : "Mostrar senha"}
+                      >
+                        {showSetupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/80">
+                      Mín. {MIN_PASSWORD_LENGTH} caracteres
+                    </p>
                   </div>
-                ) : isRegister ? (
-                  <>
-                    <div className="mt-8 space-y-3">
-                      {providers.map(({ name, label, icon }) => (
-                        <Button
-                          key={name}
-                          type="button"
-                          variant="outline"
-                          className="group relative h-12 w-full justify-center overflow-hidden rounded-md border border-white/8 bg-[#351b1b] text-[0.95rem] font-medium text-[#f6eeeb] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)] transition-all duration-200 hover:-translate-y-px hover:border-[#ff334f]/45 hover:bg-[#3a1e1e]"
-                          onClick={() =>
-                            startOAuth(
-                              name as "google" | "discord" | "steam",
-                              returnTo,
-                              isRegister ? "register" : "login"
-                            )
-                          }
-                        >
-                          <span
-                            aria-hidden
-                            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full"
-                          />
-                          <span className="relative flex items-center gap-3">
-                            {icon}
-                            <span>{label}</span>
-                          </span>
-                        </Button>
-                      ))}
-                    </div>
 
-                    <div className="my-6 flex items-center gap-4">
-                      <div className="h-px flex-1 bg-white/10" />
-                      <span className="text-[10px] uppercase tracking-[0.3em] text-[#8f7670]">
-                        ou
-                      </span>
-                      <div className="h-px flex-1 bg-white/10" />
+                  <div>
+                    <Label htmlFor="setup-confirm-password" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">
+                      Confirmar Senha
+                    </Label>
+                    <div className="relative">
+                      <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                      <Input
+                        id="setup-confirm-password"
+                        type={showSetupConfirm ? "text" : "password"}
+                        value={setupConfirmPassword}
+                        onChange={(event) => setSetupConfirmPassword(event.currentTarget.value)}
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        className="h-12 border-white/10 bg-white/5 pl-10 pr-12 text-white transition-all placeholder:text-white/10 focus:border-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSetupConfirm((current) => !current)}
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-white"
+                        aria-label={showSetupConfirm ? "Ocultar confirmação" : "Mostrar confirmação"}
+                      >
+                        {showSetupConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
+                  </div>
 
-                    <form className="space-y-4" onSubmit={onRegisterSubmit}>
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="register-email"
-                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
-                        >
+                  {setPasswordMutation.isError ? (
+                    <p className="text-sm text-destructive">Não foi possível definir a senha.</p>
+                  ) : null}
+
+                  <Button
+                    type="submit"
+                    disabled={setPasswordMutation.isPending || !setupPassword || !setupConfirmPassword}
+                    className="h-12 w-full bg-primary text-sm font-black uppercase italic tracking-[0.2em] text-primary-foreground shadow-[0_0_20px_rgba(248,109,131,0.2)] hover:bg-primary/90 disabled:opacity-60"
+                  >
+                    {setPasswordMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Definir Senha"
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {provider && !isRegister ? (
+                    <div className="flex items-center gap-3 border border-white/10 bg-[var(--surface-1)] px-4 py-3 text-sm">
+                      {oauthAvatarUrl ? (
+                        <img src={oauthAvatarUrl} alt="" className="h-10 w-10 border border-white/10 object-cover" />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center border border-white/10 bg-[var(--surface-3)] text-xs font-bold uppercase text-primary">
+                          {resolveProviderLabel(provider)?.slice(0, 1) ?? "O"}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-white">
+                          {oauthDisplayName || oauthLogin || "Conta OAuth"}
+                        </p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Iniciado com {resolveProviderLabel(provider)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-2.5">
+                    {providers.map(({ name, label, icon }) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() =>
+                          startOAuth(name as "google" | "discord" | "steam", {
+                            returnTo: finalRedirectUri,
+                            entry: isRegister ? "register" : "login",
+                            clientId: clientFlow?.clientId,
+                            redirectUri: clientFlow?.redirectUri
+                          })
+                        }
+                        className="group relative flex h-12 w-full items-center justify-center gap-3 overflow-hidden border border-white/10 bg-white/5 text-sm font-bold text-white transition-all hover:border-primary/40 hover:bg-white/10"
+                      >
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+                        />
+                        <span className="relative flex items-center gap-3">
+                          {icon}
+                          <span className="uppercase tracking-wider">{label}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="my-2 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-white/10" />
+                    <span className="text-[10px] font-black uppercase italic tracking-[0.3em] text-muted-foreground/80">
+                      ou
+                    </span>
+                    <div className="h-px flex-1 bg-white/10" />
+                  </div>
+
+                  {isRegister ? (
+                    <>
+                      <div>
+                        <Label htmlFor="register-email" className="mb-1.5 block text-10 font-black uppercase tracking-widest text-muted-foreground">
                           Email
                         </Label>
-                        <Input
-                          id="register-email"
-                          value={registerEmail}
-                          onChange={onRegisterEmailChange}
-                          autoComplete="email"
-                          placeholder="voce@exemplo.com"
-                          className="h-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
-                        />
+                        <div className="relative">
+                          <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                          <Input
+                            id="register-email"
+                            value={registerEmail}
+                            onChange={onRegisterEmailChange}
+                            autoComplete="email"
+                            placeholder="player@sga.gg"
+                            className="h-12 border-white/10 bg-white/5 pl-10 text-white transition-all placeholder:text-white/10 focus:border-primary"
+                          />
+                        </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="register-login"
-                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
-                        >
-                          Usuario
+                      <div>
+                        <Label htmlFor="register-login" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">
+                          Codinome (Usuário)
                         </Label>
-                        <Input
-                          id="register-login"
-                          value={registerLogin}
-                          onChange={onRegisterLoginChange}
-                          autoComplete="username"
-                          placeholder="seu.usuario"
-                          className="h-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
-                        />
+                        <div className="relative">
+                          <UserIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                          <Input
+                            id="register-login"
+                            value={registerLogin}
+                            onChange={onRegisterLoginChange}
+                            autoComplete="username"
+                            placeholder="seu.usuario"
+                            className="h-12 border-white/10 bg-white/5 pl-10 text-white transition-all placeholder:text-white/10 focus:border-primary"
+                          />
+                        </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="register-password"
-                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
-                        >
-                          Senha
+                      <div>
+                        <Label htmlFor="register-password" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">
+                          Chave de Acesso (Senha)
                         </Label>
-                        <Input
-                          id="register-password"
-                          type="password"
-                          value={registerPassword}
-                          onChange={onRegisterPasswordChange}
-                          autoComplete="new-password"
-                          placeholder="••••••••"
-                          className="h-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
-                        />
-                        <p className="text-xs text-[#b8928c]">
-                          Mínimo de {MIN_PASSWORD_LENGTH} caracteres.
+                        <div className="relative">
+                          <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                          <Input
+                            id="register-password"
+                            type="password"
+                            value={registerPassword}
+                            onChange={onRegisterPasswordChange}
+                            autoComplete="new-password"
+                            placeholder="••••••••"
+                            className="h-12 border-white/10 bg-white/5 pl-10 text-white transition-all placeholder:text-white/10 focus:border-primary"
+                          />
+                        </div>
+                        <p className="mt-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/80">
+                          Mín. {MIN_PASSWORD_LENGTH} caracteres
                         </p>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="register-confirm-password"
-                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
-                        >
-                          Confirmar senha
+                      <div>
+                        <Label htmlFor="register-confirm-password" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">
+                          Confirmar Chave
                         </Label>
-                        <Input
-                          id="register-confirm-password"
-                          type="password"
-                          value={registerConfirmPassword}
-                          onChange={onRegisterConfirmPasswordChange}
-                          autoComplete="new-password"
-                          placeholder="••••••••"
-                          className="h-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
-                        />
+                        <div className="relative">
+                          <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                          <Input
+                            id="register-confirm-password"
+                            type="password"
+                            value={registerConfirmPassword}
+                            onChange={onRegisterConfirmPasswordChange}
+                            autoComplete="new-password"
+                            placeholder="••••••••"
+                            className="h-12 border-white/10 bg-white/5 pl-10 text-white transition-all placeholder:text-white/10 focus:border-primary"
+                          />
+                        </div>
                       </div>
 
                       {registerMutation.isError ? (
-                        <p className="text-sm text-[#ff5b6f]">
-                          Nao foi possivel criar a conta. Verifique email e usuario.
+                        <p className="text-sm text-destructive">
+                          Não foi possível criar a conta. Verifique email e usuário.
                         </p>
                       ) : null}
 
@@ -507,174 +560,88 @@ export function AuthApp() {
                           !registerPassword ||
                           !registerConfirmPassword
                         }
-                        className="h-12 w-full rounded-md bg-[#ff243f] text-[0.95rem] font-bold uppercase tracking-[0.14em] text-white shadow-[0_10px_28px_-10px_rgba(255,36,63,0.95)] transition-transform duration-200 hover:-translate-y-px hover:bg-[#ff3a52]"
+                        className="h-12 w-full bg-primary text-sm font-black uppercase italic tracking-[0.2em] text-primary-foreground shadow-[0_0_20px_rgba(248,109,131,0.2)] hover:bg-primary/90 disabled:opacity-60"
                       >
-                        {registerMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          "Criar conta"
-                        )}
+                        {registerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Identidade"}
                       </Button>
-                    </form>
 
-                    <p className="mt-8 text-center text-sm text-[#9f8984]">
-                      Já tem conta?{" "}
-                      <a href="/" className="font-semibold text-[#ff243f] hover:underline">
-                        Entrar
-                      </a>
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    {provider ? (
-                      <div className="mt-6 flex items-center gap-3 rounded-md border border-white/8 bg-[#341515] px-4 py-3 text-sm text-[#f3dbd6]">
-                        {oauthAvatarUrl ? (
-                          <img
-                            src={oauthAvatarUrl}
-                            alt=""
-                            className="h-10 w-10 rounded-full border border-white/10 object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#2d1212] text-xs font-bold uppercase text-[#ff6a7b]">
-                            {resolveProviderLabel(provider)?.slice(0, 1) ?? "O"}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-[#fff2ef]">
-                            {oauthDisplayName || oauthLogin || "Conta OAuth"}
-                          </p>
-                          <p className="text-xs text-[#c7aba5]">
-                            Entrada iniciada com {resolveProviderLabel(provider)}
-                          </p>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="mt-8 space-y-3">
-                      {providers.map(({ name, label, icon }) => (
-                        <Button
-                          key={name}
-                          type="button"
-                          variant="outline"
-                          className="group relative h-12 w-full justify-center overflow-hidden rounded-md border border-white/8 bg-[#351b1b] text-[0.95rem] font-medium text-[#f6eeeb] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)] transition-all duration-200 hover:-translate-y-px hover:border-[#ff334f]/45 hover:bg-[#3a1e1e]"
-                          onClick={() =>
-                            startOAuth(
-                              name as "google" | "discord" | "steam",
-                              returnTo,
-                              isRegister ? "register" : "login"
-                            )
-                          }
-                        >
-                          <span
-                            aria-hidden
-                            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full"
-                          />
-                          <span className="relative flex items-center gap-3">
-                            {icon}
-                            <span>{label}</span>
-                          </span>
-                        </Button>
-                      ))}
-                    </div>
-
-                    <div className="my-6 flex items-center gap-4">
-                      <div className="h-px flex-1 bg-white/10" />
-                      <span className="text-[10px] uppercase tracking-[0.3em] text-[#8f7670]">
-                        ou
-                      </span>
-                      <div className="h-px flex-1 bg-white/10" />
-                    </div>
-
-                    <form className="space-y-4" onSubmit={onSubmit}>
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="identifier"
-                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
-                        >
+                      <p className="mt-6 text-center text-[10px] uppercase italic tracking-widest text-muted-foreground">
+                        Já tem credenciais?{" "}
+                        <a href="/" className="font-black text-primary transition-colors hover:text-white">
+                          Acessar
+                        </a>
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <Label htmlFor="identifier" className="mb-1.5 block text-2 font-black uppercase tracking-widest text-muted-foreground">
                           Email
                         </Label>
-                        <Input
-                          id="identifier"
-                          value={identifier}
-                          onChange={onIdentifierChange}
-                          autoComplete="username"
-                          placeholder="voce@exemplo.com"
-                          className="h-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
-                        />
+                        <div className="relative">
+                          <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                          <Input
+                            id="identifier"
+                            value={identifier}
+                            onChange={onIdentifierChange}
+                            autoComplete="username"
+                            placeholder="player@sga.gg"
+                            className="h-12 border-white/10 bg-white/5 pl-10 text-white transition-all placeholder:text-white/10 focus:border-primary"
+                          />
+                        </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="password"
-                          className="text-[0.68rem] uppercase tracking-[0.18em] text-[#b8928c]"
-                        >
+                      <div>
+                        <Label htmlFor="password" className="mb-1.5 block text-2 font-black uppercase tracking-widest text-muted-foreground">
                           Senha
                         </Label>
-                        <Input
-                          id="password"
-                          type="password"
-                          value={password}
-                          onChange={onPasswordChange}
-                          autoComplete="current-password"
-                          placeholder="••••••••"
-                          className="h-12 border-white/8 bg-[#3d2323] text-[#f9efed] placeholder:text-[#b89e98]/45 focus-visible:border-[#ff334f]/60 focus-visible:ring-[#ff334f]/25"
-                        />
+                        <div className="relative">
+                          <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                          <Input
+                            id="password"
+                            type="password"
+                            value={password}
+                            onChange={onPasswordChange}
+                            autoComplete="current-password"
+                            placeholder="••••••••"
+                            className="h-12 border-white/10 bg-white/5 pl-10 text-white transition-all placeholder:text-white/10 focus:border-primary"
+                          />
+                        </div>
                       </div>
 
                       {loginMutation.isError ? (
-                        <p className="text-sm text-[#ff5b6f]">
-                          Credenciais invalidas ou usuario inativo.
+                        <p className="text-sm text-destructive">
+                          Credenciais inválidas ou usuário inativo.
                         </p>
                       ) : null}
 
                       <Button
                         type="submit"
                         disabled={loginMutation.isPending || !identifier || !password}
-                        className="h-12 w-full rounded-md bg-[#ff243f] text-[0.95rem] font-bold uppercase tracking-[0.14em] text-white shadow-[0_10px_28px_-10px_rgba(255,36,63,0.95)] transition-transform duration-200 hover:-translate-y-px hover:bg-[#ff3a52]"
+                        className="h-12 w-full bg-primary text-sm font-black uppercase italic tracking-[0.2em] text-primary-foreground shadow-[0_0_20px_rgba(248,109,131,0.2)] hover:bg-primary/90 disabled:opacity-60"
                       >
                         {loginMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          "Entrar"
+                          "Acessar Sistema"
                         )}
                       </Button>
 
-                      <div className="text-center">
-                        <a
-                          href="#"
-                          className="text-xs font-medium text-[#ff243f] transition-colors hover:text-[#ff5167]"
-                        >
-                          Esqueceu a senha?
+                      <p className="mt-6 text-center text-[10px] uppercase italic tracking-widest text-muted-foreground">
+                        Sem credenciais?{" "}
+                        <a href="/register" className="font-black text-primary transition-colors hover:text-white">
+                          Criar Identidade
                         </a>
-                      </div>
-                    </form>
-
-                    <p className="mt-8 text-center text-sm text-[#9f8984]">
-                      Não tem uma conta?{" "}
-                      <a href="/register" className="font-semibold text-[#ff243f] hover:underline">
-                        Cadastre-se
-                      </a>
-                    </p>
-
-                    <p className="mt-4 text-center text-[11px] leading-5 text-[#8f7670]">
-                      Ao continuar, você concorda com nossos{" "}
-                      <a href="#" className="text-[#ff243f] hover:underline">
-                        Termos
-                      </a>{" "}
-                      e{" "}
-                      <a href="#" className="text-[#ff243f] hover:underline">
-                        Política de Privacidade
-                      </a>
-                      .
-                    </p>
-                  </>
-                )}
-              </div>
-            </Card>
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+            </form>
           </motion.div>
         </div>
 
-        <p className="relative z-10 mt-8 text-center text-[11px] uppercase tracking-[0.5em] text-[#9c847e]">
+        <p className="relative z-10 mt-8 text-center text-[10px] uppercase italic tracking-[0.5em] text-muted-foreground/60">
           SGA ・ Santos Games Arena
         </p>
       </div>
@@ -684,26 +651,19 @@ export function AuthApp() {
 
 function resolveReturnTo() {
   const fallback = mainSiteUrl;
+  const candidate = new URLSearchParams(window.location.search).get("returnTo");
 
-  const candidates = [
-    new URLSearchParams(window.location.search).get("returnTo"),
-    document.referrer
-  ];
+  if (!candidate) {
+    return fallback;
+  }
 
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
+  try {
+    const url = new URL(candidate, window.location.origin);
+    if (url.hostname === "santos-games.com" || url.hostname.endsWith(".santos-games.com")) {
+      return url.toString();
     }
-
-    try {
-      const url = new URL(candidate, window.location.origin);
-
-      if (allowedReturnToHosts.has(url.hostname)) {
-        return url.toString();
-      }
-    } catch {
-      // Ignore invalid candidates and fall back below.
-    }
+  } catch {
+    // Ignore invalid candidates.
   }
 
   return fallback;

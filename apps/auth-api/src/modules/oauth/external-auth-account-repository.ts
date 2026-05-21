@@ -19,8 +19,9 @@ export function createExternalAuthAccountRepository(
         login: string;
         password_hash: string;
         is_active: boolean;
+        role: number;
       }>>`
-        select u.id, u.email, u.login, u.password_hash, u.is_active
+        select u.id, u.email, u.login, u.password_hash, u.is_active, u.role
         from "External_Auth_Account" e
         join "User" u on u.id = e.user_id
         where e.provider = ${provider}
@@ -34,7 +35,8 @@ export function createExternalAuthAccountRepository(
             email: user.email,
             login: user.login,
             passwordHash: user.password_hash,
-            isActive: user.is_active
+            isActive: user.is_active,
+            role: user.role
           }
         : null;
     },

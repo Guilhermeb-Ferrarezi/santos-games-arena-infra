@@ -2,6 +2,7 @@ import type { PostgresClient } from "@santos-games/postgres";
 import type { OAuthProvider } from "../oauth/providers";
 
 const PLATFORM_USER_ROLE = 2;
+export const ADMIN_ROLE = 1;
 
 export type PlatformUser = {
   id: number;
@@ -9,6 +10,7 @@ export type PlatformUser = {
   login: string;
   passwordHash: string;
   isActive: boolean;
+  role: number;
 };
 
 export type PlatformUserRepository = {
@@ -41,8 +43,9 @@ export function createPlatformUserRepository(
         login: string;
         password_hash: string;
         is_active: boolean;
+        role: number;
       }>>`
-        select id, email, login, password_hash, is_active
+        select id, email, login, password_hash, is_active, role
         from "User"
         where lower(email) = ${normalizedIdentifier}
            or lower(login) = ${normalizedIdentifier}
@@ -58,7 +61,8 @@ export function createPlatformUserRepository(
         email: user.email,
         login: user.login,
         passwordHash: user.password_hash,
-        isActive: user.is_active
+        isActive: user.is_active,
+        role: user.role
       };
     },
 
@@ -69,8 +73,9 @@ export function createPlatformUserRepository(
         login: string;
         password_hash: string;
         is_active: boolean;
+        role: number;
       }>>`
-        select id, email, login, password_hash, is_active
+        select id, email, login, password_hash, is_active, role
         from "User"
         where id = ${userId}
         limit 1
@@ -82,7 +87,8 @@ export function createPlatformUserRepository(
             email: user.email,
             login: user.login,
             passwordHash: user.password_hash,
-            isActive: user.is_active
+            isActive: user.is_active,
+            role: user.role
           }
         : null;
     },
@@ -94,6 +100,7 @@ export function createPlatformUserRepository(
         login: string;
         password_hash: string;
         is_active: boolean;
+        role: number;
       }>>`
         insert into "User" (
           email,
@@ -113,7 +120,7 @@ export function createPlatformUserRepository(
           now(),
           now()
         )
-        returning id, email, login, password_hash, is_active
+        returning id, email, login, password_hash, is_active, role
       `;
 
       return {
@@ -121,7 +128,8 @@ export function createPlatformUserRepository(
         email: user.email,
         login: user.login,
         passwordHash: user.password_hash,
-        isActive: user.is_active
+        isActive: user.is_active,
+        role: user.role
       };
     },
 
@@ -132,6 +140,7 @@ export function createPlatformUserRepository(
         login: string;
         password_hash: string;
         is_active: boolean;
+        role: number;
       }>>`
         insert into "User" (
           email,
@@ -151,7 +160,7 @@ export function createPlatformUserRepository(
           now(),
           now()
         )
-        returning id, email, login, password_hash, is_active
+        returning id, email, login, password_hash, is_active, role
       `;
 
       return {
@@ -159,7 +168,8 @@ export function createPlatformUserRepository(
         email: user.email,
         login: user.login,
         passwordHash: user.password_hash,
-        isActive: user.is_active
+        isActive: user.is_active,
+        role: user.role
       };
     },
 

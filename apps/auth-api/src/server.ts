@@ -9,6 +9,8 @@ import { checkDependencies, type DependencyPingers } from "./infra/dependencies"
 import { createAuthEventLogger } from "./modules/logs/auth-event-logger";
 import { createHttpLogUserResolver } from "./modules/logs/http-log-user-resolver";
 import { registerAuthRoutes } from "./modules/auth/routes";
+import type { AuthClientRepository } from "./modules/clients/client-repository";
+import { registerClientAdminRoutes } from "./modules/clients/routes";
 import type { ExternalAuthAccountRepository } from "./modules/oauth/external-auth-account-repository";
 import type { OAuthClient } from "./modules/oauth/oauth-client";
 import { registerOAuthRoutes } from "./modules/oauth/routes";
@@ -19,6 +21,7 @@ import { registerOpenApi } from "./openapi";
 
 const API_PREFIX = "/api";
 const AUTH_PREFIX = `${API_PREFIX}/auth`;
+const ADMIN_PREFIX = `${API_PREFIX}/admin`;
 
 export type AuthApiServerOptions = {
   env?: Partial<AuthApiEnv>;
@@ -27,11 +30,12 @@ export type AuthApiServerOptions = {
   oauthClient?: OAuthClient;
   users?: PlatformUserRepository;
   sessions?: SessionStore;
+  authClients?: AuthClientRepository;
   authEvents?: ReturnType<typeof createAuthEventLogger>;
 };
 
 export function createAuthApiServer(options: AuthApiServerOptions = {}) {
-  const { dependencies, env, externalAccounts, oauthClient, sessions, users, authEvents } = options;
+  const { dependencies, env, externalAccounts, oauthClient, sessions, users, authClients, authEvents } = options;
   const server = Fastify({
     logger: env?.NODE_ENV === "production"
   });
@@ -142,7 +146,8 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
           },
           users,
           sessions,
-          externalAccounts
+          externalAccounts,
+          authClients
         );
       },
       { prefix: AUTH_PREFIX }
@@ -171,11 +176,30 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
             oauthClient,
             sessions,
             users,
-            authEvents: resolvedAuthEvents
+            authEvents: resolvedAuthEvents,
+            authClients
           }
         );
       },
       { prefix: AUTH_PREFIX }
+    );
+  }
+
+  if (authClients && users && env?.AUTH_COOKIE_NAME && env.JWT_SECRET) {
+    server.register(
+      async (adminServer) => {
+        registerClientAdminRoutes(
+          adminServer,
+          {
+            AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME!,
+            JWT_SECRET: env.JWT_SECRET!
+          },
+          authClients,
+          users,
+          sessions
+        );
+      },
+      { prefix: ADMIN_PREFIX }
     );
   }
 

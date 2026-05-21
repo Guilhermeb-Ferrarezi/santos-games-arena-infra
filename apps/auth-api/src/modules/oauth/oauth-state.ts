@@ -9,20 +9,30 @@ type OAuthStatePayload = {
   nonce: string;
   returnTo: string;
   entry?: "login" | "register";
+  clientId?: string;
+  redirectUri?: string;
+};
+
+export type CreateOAuthStateInput = {
+  returnTo?: string;
+  entry?: "login" | "register";
+  clientId?: string;
+  redirectUri?: string;
 };
 
 export async function createOAuthState(
   provider: OAuthProvider,
   env: Pick<AuthApiEnv, "JWT_SECRET" | "OAUTH_STATE_TTL_SECONDS">,
-  returnTo?: string,
-  entry?: "login" | "register"
+  input: CreateOAuthStateInput = {}
 ) {
   const payload: OAuthStatePayload = {
     provider,
     exp: Math.floor(Date.now() / 1000) + env.OAUTH_STATE_TTL_SECONDS,
     nonce: crypto.randomUUID(),
-    returnTo: normalizeReturnTo(returnTo),
-    entry
+    returnTo: normalizeReturnTo(input.returnTo),
+    entry: input.entry,
+    clientId: input.clientId,
+    redirectUri: input.redirectUri
   };
   const encodedPayload = base64UrlEncodeJson(payload);
   const signature = await sign(encodedPayload, env.JWT_SECRET);
@@ -60,7 +70,9 @@ export async function readOAuthState(
         exp: payload.exp,
         nonce: payload.nonce ?? crypto.randomUUID(),
         returnTo: payload.returnTo,
-        entry: payload.entry === "login" || payload.entry === "register" ? payload.entry : undefined
+        entry: payload.entry === "login" || payload.entry === "register" ? payload.entry : undefined,
+        clientId: typeof payload.clientId === "string" ? payload.clientId : undefined,
+        redirectUri: typeof payload.redirectUri === "string" ? payload.redirectUri : undefined
       };
     }
   } catch {

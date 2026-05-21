@@ -2,6 +2,7 @@ import { createPostgresClient, pingPostgres } from "@santos-games/postgres";
 import { createRedisClient, pingRedis } from "@santos-games/redis";
 
 import { parseAuthApiEnv } from "./config/env";
+import { createAuthClientRepository } from "./modules/clients/client-repository";
 import { createExternalAuthAccountRepository } from "./modules/oauth/external-auth-account-repository";
 import { createOAuthClient } from "./modules/oauth/oauth-client";
 import { createRedisSessionStore } from "./modules/session/session-store";
@@ -15,12 +16,14 @@ const externalAccounts = createExternalAuthAccountRepository(postgres);
 const oauthClient = createOAuthClient(env);
 const users = createPlatformUserRepository(postgres);
 const sessions = createRedisSessionStore(redis);
+const authClients = createAuthClientRepository(postgres);
 const server = createAuthApiServer({
   env,
   externalAccounts,
   oauthClient,
   sessions,
   users,
+  authClients,
   dependencies: {
     postgres: () => pingPostgres(postgres),
     redis: () => pingRedis(redis)

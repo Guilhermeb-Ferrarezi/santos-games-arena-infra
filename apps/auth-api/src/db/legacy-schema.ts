@@ -63,5 +63,19 @@ export const legacyAuthSchema = {
       lastLoginAt: "last_login_at"
     },
     uniqueIndexes: ["provider_external_account_id"]
+  },
+  authClient: {
+    sourceModel: "dotnet-primary-api/SGA_Plataforma.Infrastructure/Models/AuthClient-Models.cs",
+    table: "Auth_Client",
+    columns: {
+      id: "id",
+      createdAt: "created_at",
+      updatedAt: "updated_at",
+      clientId: "client_id",
+      name: "name",
+      allowedRedirectUris: "allowed_redirect_uris",
+      isActive: "is_active"
+    },
+    uniqueIndexes: ["client_id"]
   }
 } as const;

@@ -1,8 +1,10 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
 import type { AuthApiEnv } from "../../../config/env";
 import { createPasswordHash, verifyPassword } from "./password";
+import type { AuthClientRepository } from "../clients/client-repository";
+import { resolveClientRedirect } from "../clients/validate-redirect";
 import type { PlatformUserRepository } from "../users/platform-user-repository";
 import { createSessionToken } from "../session/session-token";
 import { createSessionId, type SessionStore } from "../session/session-store";
@@ -11,13 +13,20 @@ import type { ExternalAuthAccountRepository } from "../oauth/external-auth-accou
 import { isOAuthProvider } from "../oauth/providers";
 import { verifySessionToken } from "../session/session-token";
 
+const clientFlowFields = {
+  clientId: z.string().trim().min(1).optional(),
+  redirectUri: z.string().trim().url().optional()
+} as const;
+
 const loginBodySchema = z.object({
   identifier: z.string().trim().min(1),
-  password: z.string().min(1)
+  password: z.string().min(1),
+  ...clientFlowFields
 });
 
 const setPasswordBodySchema = z.object({
-  password: z.string().min(8)
+  password: z.string().min(8),
+  ...clientFlowFields
 });
 
 const registerBodySchema = z.object({
@@ -27,8 +36,42 @@ const registerBodySchema = z.object({
   provider: z.string().trim().min(1).optional(),
   externalAccountId: z.string().trim().min(1).optional(),
   displayName: z.string().trim().min(1).optional(),
-  avatarUrl: z.string().trim().url().optional()
+  avatarUrl: z.string().trim().url().optional(),
+  ...clientFlowFields
 });
+
+async function resolveOptionalRedirect(
+  reply: FastifyReply,
+  authClients: AuthClientRepository | undefined,
+  input: { clientId?: string; redirectUri?: string }
+): Promise<{ redirectUri: string | null } | "sent_error"> {
+  if (!input.clientId && !input.redirectUri) {
+    return { redirectUri: null };
+  }
+
+  if (!authClients) {
+    reply.code(503).send({
+      error: "clients_not_ready",
+      message: "Validacao de aplicacao indisponivel neste ambiente."
+    });
+    return "sent_error";
+  }
+
+  const result = await resolveClientRedirect(authClients, {
+    clientId: input.clientId,
+    redirectUri: input.redirectUri
+  });
+
+  if (!result.ok) {
+    reply.code(400).send({
+      error: result.error.reason,
+      message: "Aplicacao ou redirect_uri invalidos."
+    });
+    return "sent_error";
+  }
+
+  return { redirectUri: result.resolved.redirectUri };
+}
 
 export function registerAuthRoutes(
   server: FastifyInstance,
@@ -42,8 +85,38 @@ export function registerAuthRoutes(
   >,
   users: PlatformUserRepository,
   sessions?: SessionStore,
-  externalAccounts?: ExternalAuthAccountRepository
+  externalAccounts?: ExternalAuthAccountRepository,
+  authClients?: AuthClientRepository
 ) {
+  server.get("/client", async (request, reply) => {
+    const query = request.query as { client_id?: string; redirect_uri?: string };
+
+    if (!authClients) {
+      return reply.code(503).send({
+        error: "clients_not_ready",
+        message: "Validacao de aplicacao indisponivel neste ambiente."
+      });
+    }
+
+    const result = await resolveClientRedirect(authClients, {
+      clientId: query.client_id,
+      redirectUri: query.redirect_uri
+    });
+
+    if (!result.ok) {
+      return reply.code(400).send({ error: result.error.reason });
+    }
+
+    return {
+      ok: true,
+      client: {
+        clientId: result.resolved.client.clientId,
+        name: result.resolved.client.name
+      },
+      redirectUri: result.resolved.redirectUri
+    };
+  });
+
   server.post("/login", async (request, reply) => {
     const parsedBody = loginBodySchema.safeParse(request.body);
 
@@ -52,6 +125,11 @@ export function registerAuthRoutes(
         error: "invalid_request",
         message: "Dados de login invalidos."
       });
+    }
+
+    const redirect = await resolveOptionalRedirect(reply, authClients, parsedBody.data);
+    if (redirect === "sent_error") {
+      return;
     }
 
     const user = await users.findByIdentifier(parsedBody.data.identifier);
@@ -120,7 +198,8 @@ export function registerAuthRoutes(
         id: user.id,
         email: user.email,
         login: user.login
-      }
+      },
+      ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
     };
   });
 
@@ -132,6 +211,11 @@ export function registerAuthRoutes(
         error: "invalid_request",
         message: "Dados de cadastro invalidos."
       });
+    }
+
+    const redirect = await resolveOptionalRedirect(reply, authClients, parsedBody.data);
+    if (redirect === "sent_error") {
+      return;
     }
 
     const normalizedEmail = parsedBody.data.email.trim().toLowerCase();
@@ -225,7 +309,8 @@ export function registerAuthRoutes(
         id: user.id,
         email: user.email,
         login: user.login
-      }
+      },
+      ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
     };
   });
 
@@ -237,6 +322,11 @@ export function registerAuthRoutes(
         error: "invalid_request",
         message: "Senha invalida."
       });
+    }
+
+    const redirect = await resolveOptionalRedirect(reply, authClients, parsedBody.data);
+    if (redirect === "sent_error") {
+      return;
     }
 
     const token = request.cookies[env.AUTH_COOKIE_NAME];
@@ -260,7 +350,8 @@ export function registerAuthRoutes(
     await users.updatePassword(session.userId, passwordHash);
 
     return {
-      success: true
+      success: true,
+      ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
     };
   });
 }
