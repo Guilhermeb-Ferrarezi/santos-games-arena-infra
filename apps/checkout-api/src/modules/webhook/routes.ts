@@ -1,35 +1,22 @@
+import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { CheckoutApiEnv } from "../../config/env";
 import type { OrderRepository } from "../checkout/order-repository";
 
-const encoder = new TextEncoder();
+// Chave pública do Abacate Pay usada para assinar todos os webhooks
+const ABACATE_PAY_PUBLIC_KEY =
+  "t9dXRhHHo3yDEj5pVDYz0frf7q6bMKyMRmxxCPIPp3RCplBfXRxqlC6ZpiWmOqj4L63qEaeUOtrCI8P0VMUgo6iIga2ri9ogaHFs0WIIywSMg0q7RmBfybe1E5XJcfC4IW3alNqym0tXoAKkzvfEjZxV6bE0oG2zJrNNYmUCKZyV0KZ3JS8Votf9EAWWYdiDkMkpbMdPggfh1EqHlVkMiTady6jOR3hyzGEHrIz2Ret0xHKMbiqkr9HS1JhNHDX9";
 
-async function verifyWebhookSignature(
-  rawBody: Buffer,
-  signature: string,
-  secret: string
-): Promise<boolean> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
+function verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {
+  const expected = crypto
+    .createHmac("sha256", ABACATE_PAY_PUBLIC_KEY)
+    .update(rawBody)
+    .digest("base64");
 
-  const mac = await crypto.subtle.sign("HMAC", key, rawBody);
-  const expected = Buffer.from(mac).toString("base64");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
 
-  if (expected.length !== signature.length) {
-    return false;
-  }
-
-  let result = 0;
-  for (let i = 0; i < expected.length; i++) {
-    result |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
-  }
-
-  return result === 0;
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export function registerWebhookRoutes(
@@ -49,17 +36,32 @@ export function registerWebhookRoutes(
   server.post("/webhook", async (request, reply) => {
     const { raw, json } = request.body as { raw: Buffer; json: unknown };
 
-    const signature = request.headers["x-webhook-signature"];
-    if (typeof signature !== "string") {
-      return reply.code(401).send({ error: "missing_signature" });
+    // Verificar webhookSecret no query param (secret que registramos no Abacate Pay)
+    const { webhookSecret } = request.query as { webhookSecret?: string };
+    if (!webhookSecret) {
+      return reply.code(401).send({ error: "missing_secret" });
+    }
+    const secretA = Buffer.from(webhookSecret);
+    const secretB = Buffer.from(env.ABACATE_PAY_WEBHOOK_SECRET);
+    if (
+      secretA.length !== secretB.length ||
+      !crypto.timingSafeEqual(secretA, secretB)
+    ) {
+      return reply.code(401).send({ error: "invalid_secret" });
     }
 
-    const valid = await verifyWebhookSignature(raw, signature, env.ABACATE_PAY_WEBHOOK_SECRET);
-    if (!valid) {
-      return reply.code(401).send({ error: "invalid_signature" });
+    // Verificar assinatura HMAC com a chave pública do Abacate Pay
+    const signature = request.headers["x-webhook-signature"];
+    if (typeof signature === "string") {
+      const valid = verifyWebhookSignature(raw, signature);
+      if (!valid) {
+        return reply.code(401).send({ error: "invalid_signature" });
+      }
     }
 
     const event = json as { event?: string; data?: { checkout?: { id?: string; status?: string } } };
+
+    console.log("[webhook] received event", event?.event, event?.data?.checkout?.id, event?.data?.checkout?.status);
 
     const checkoutId = event?.data?.checkout?.id;
     const checkoutStatus = event?.data?.checkout?.status;
