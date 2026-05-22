@@ -59,18 +59,18 @@ export function registerWebhookRoutes(
       return reply.code(401).send({ error: "invalid_signature" });
     }
 
-    const event = json as { event?: string; data?: { billing?: { id?: string; status?: string } } };
+    const event = json as { event?: string; data?: { checkout?: { id?: string; status?: string } } };
 
-    const billingId = event?.data?.billing?.id;
-    const billingStatus = event?.data?.billing?.status;
+    const checkoutId = event?.data?.checkout?.id;
+    const checkoutStatus = event?.data?.checkout?.status;
 
-    if (billingId && billingStatus) {
-      if (billingStatus === "PAID") {
-        await orders.updateStatus(billingId, "paid");
-      } else if (billingStatus === "EXPIRED") {
-        await orders.updateStatus(billingId, "expired");
-      } else if (billingStatus === "FAILED") {
-        await orders.updateStatus(billingId, "failed");
+    if (checkoutId && checkoutStatus) {
+      if (checkoutStatus === "PAID") {
+        await orders.updateStatus(checkoutId, "paid");
+      } else if (checkoutStatus === "EXPIRED") {
+        await orders.updateStatus(checkoutId, "expired");
+      } else if (checkoutStatus === "FAILED") {
+        await orders.updateStatus(checkoutId, "failed");
       }
     }
 

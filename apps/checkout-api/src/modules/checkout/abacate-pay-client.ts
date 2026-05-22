@@ -52,7 +52,7 @@ export function createAbacatePayClient(
       })
     });
 
-    const json = await response.json() as { data?: { id: string; _id?: string } | null; error?: string | null };
+    const json = await response.json() as { data?: { id: string } | null; error?: string | null };
 
     console.log("[abacate-pay] customer response", response.status, JSON.stringify(json));
 
@@ -60,28 +60,66 @@ export function createAbacatePayClient(
       return { ok: false, error: json.error ?? `HTTP ${response.status}` };
     }
 
-    const customerId = json.data.id ?? json.data._id ?? "";
-    console.log("[abacate-pay] resolved customerId", customerId);
-    return { ok: true, customerId };
+    return { ok: true, customerId: json.data.id };
+  }
+
+  async function ensureProduct(externalId: string, name: string, price: number): Promise<string> {
+    const createResponse = await fetch(`${env.ABACATE_PAY_API_URL}/v2/products/create`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ externalId, name, price, currency: "BRL" })
+    });
+
+    const createJson = await createResponse.json() as { data?: { id: string } | null; error?: string | null };
+
+    if (createResponse.ok && createJson.data) {
+      return createJson.data.id;
+    }
+
+    if (createJson.error === "Product with externalId already exists") {
+      const getResponse = await fetch(
+        `${env.ABACATE_PAY_API_URL}/v2/products/get?externalId=${encodeURIComponent(externalId)}`,
+        { headers }
+      );
+      const getJson = await getResponse.json() as { data?: { id: string } | null; error?: string | null };
+
+      if (getResponse.ok && getJson.data) {
+        return getJson.data.id;
+      }
+
+      throw new Error(getJson.error ?? `HTTP ${getResponse.status}`);
+    }
+
+    throw new Error(createJson.error ?? `HTTP ${createResponse.status}`);
   }
 
   async function createBilling(input: CreateBillingInput): Promise<CreateBillingResult> {
-    const response = await fetch(`${env.ABACATE_PAY_API_URL}/v1/billing/create`, {
+    const items: { id: string; quantity: number }[] = [];
+
+    for (const product of input.products) {
+      try {
+        const productId = await ensureProduct(product.externalId, product.name, product.price);
+        items.push({ id: productId, quantity: product.quantity });
+      } catch (err) {
+        return { ok: false, error: `product_error: ${(err as Error).message}` };
+      }
+    }
+
+    const response = await fetch(`${env.ABACATE_PAY_API_URL}/v2/checkouts/create`, {
       method: "POST",
       headers,
       body: JSON.stringify({
-        frequency: "ONE_TIME",
-        methods: ["PIX"],
-        products: input.products,
-        returnUrl: input.returnUrl,
-        completionUrl: input.completionUrl,
-        customerId: input.customerId
+        items,
+        ...(input.customerId ? { customerId: input.customerId } : {}),
+        ...(input.returnUrl ? { returnUrl: input.returnUrl } : {}),
+        ...(input.completionUrl ? { completionUrl: input.completionUrl } : {}),
+        methods: ["PIX"]
       })
     });
 
     const json = await response.json() as { data?: { id: string; url: string; amount: number } | null; error?: string | null };
 
-    console.log("[abacate-pay] billing response", response.status, JSON.stringify(json));
+    console.log("[abacate-pay] checkout response", response.status, JSON.stringify(json));
 
     if (!response.ok || json.error || !json.data) {
       return { ok: false, error: json.error ?? `HTTP ${response.status}` };
