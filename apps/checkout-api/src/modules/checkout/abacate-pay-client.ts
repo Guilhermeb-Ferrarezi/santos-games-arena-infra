@@ -54,15 +54,19 @@ export function createAbacatePayClient(
 
     const json = await response.json() as { data?: { id: string; _id?: string } | null; error?: string | null };
 
+    console.log("[abacate-pay] customer response", response.status, JSON.stringify(json));
+
     if (!response.ok || json.error || !json.data) {
       return { ok: false, error: json.error ?? `HTTP ${response.status}` };
     }
 
-    return { ok: true, customerId: json.data.id ?? json.data._id ?? "" };
+    const customerId = json.data.id ?? json.data._id ?? "";
+    console.log("[abacate-pay] resolved customerId", customerId);
+    return { ok: true, customerId };
   }
 
   async function createBilling(input: CreateBillingInput): Promise<CreateBillingResult> {
-    const response = await fetch(`${env.ABACATE_PAY_API_URL}/v2/billing/create`, {
+    const response = await fetch(`${env.ABACATE_PAY_API_URL}/v1/billing/create`, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -76,6 +80,8 @@ export function createAbacatePayClient(
     });
 
     const json = await response.json() as { data?: { id: string; url: string; amount: number } | null; error?: string | null };
+
+    console.log("[abacate-pay] billing response", response.status, JSON.stringify(json));
 
     if (!response.ok || json.error || !json.data) {
       return { ok: false, error: json.error ?? `HTTP ${response.status}` };
