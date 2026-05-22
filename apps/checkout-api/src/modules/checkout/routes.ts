@@ -58,7 +58,7 @@ export function registerCheckoutRoutes(
       }
 
       customerId = result.customerId;
-      await customers.save(session.userId, customerId);
+      await customers.save(session.userId, customerId, session.login, session.email);
     }
 
     const order = await orders.create({

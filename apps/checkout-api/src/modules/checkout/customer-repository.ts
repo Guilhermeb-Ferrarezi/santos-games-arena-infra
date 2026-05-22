@@ -4,6 +4,8 @@ type CustomerRow = {
   id: number;
   user_id: number;
   abacate_customer_id: string;
+  user_login: string | null;
+  user_email: string | null;
   created_at: string;
 };
 
@@ -20,11 +22,19 @@ export function createCustomerRepository(client: PostgresClient) {
     return row?.abacate_customer_id ?? null;
   }
 
-  async function save(userId: number, abacateCustomerId: string): Promise<void> {
+  async function save(
+    userId: number,
+    abacateCustomerId: string,
+    userLogin?: string,
+    userEmail?: string
+  ): Promise<void> {
     await client`
-      insert into checkout_customers (user_id, abacate_customer_id)
-      values (${userId}, ${abacateCustomerId})
-      on conflict (user_id) do update set abacate_customer_id = ${abacateCustomerId}
+      insert into checkout_customers (user_id, abacate_customer_id, user_login, user_email)
+      values (${userId}, ${abacateCustomerId}, ${userLogin ?? null}, ${userEmail ?? null})
+      on conflict (user_id) do update set
+        abacate_customer_id = ${abacateCustomerId},
+        user_login = ${userLogin ?? null},
+        user_email = ${userEmail ?? null}
     `;
   }
 

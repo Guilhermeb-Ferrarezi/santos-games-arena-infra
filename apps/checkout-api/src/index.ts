@@ -1,6 +1,7 @@
 import { createPostgresClient, pingPostgres } from "@santos-games/postgres";
 
 import { parseCheckoutApiEnv } from "./config/env";
+import { runMigrations } from "./migrations";
 import { createAbacatePayClient } from "./modules/checkout/abacate-pay-client";
 import { createCustomerRepository } from "./modules/checkout/customer-repository";
 import { createOrderRepository } from "./modules/checkout/order-repository";
@@ -14,6 +15,8 @@ const orders = createOrderRepository(postgresHome);
 const customers = createCustomerRepository(postgresHome);
 const products = createProductRepository(postgresHome);
 const abacatePay = createAbacatePayClient(env);
+
+await runMigrations(postgresHome);
 
 const server = createCheckoutApiServer({
   env,
