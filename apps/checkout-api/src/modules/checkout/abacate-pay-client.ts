@@ -45,22 +45,20 @@ export function createAbacatePayClient(
       method: "POST",
       headers,
       body: JSON.stringify({
-        data: {
-          name: input.name,
-          email: input.email,
-          cellphone: input.cellphone,
-          taxId: input.taxId
-        }
+        name: input.name,
+        email: input.email,
+        ...(input.cellphone ? { cellphone: input.cellphone } : {}),
+        ...(input.taxId ? { taxId: input.taxId } : {})
       })
     });
 
-    const json = await response.json() as { data?: { id: string } | null; error?: string | null };
+    const json = await response.json() as { data?: { id: string; _id?: string } | null; error?: string | null };
 
     if (!response.ok || json.error || !json.data) {
       return { ok: false, error: json.error ?? `HTTP ${response.status}` };
     }
 
-    return { ok: true, customerId: json.data.id };
+    return { ok: true, customerId: json.data.id ?? json.data._id ?? "" };
   }
 
   async function createBilling(input: CreateBillingInput): Promise<CreateBillingResult> {
