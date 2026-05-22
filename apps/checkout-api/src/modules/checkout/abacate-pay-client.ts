@@ -62,7 +62,7 @@ export function createAbacatePayClient(
   }
 
   async function createBilling(input: CreateBillingInput): Promise<CreateBillingResult> {
-    const response = await fetch(`${env.ABACATE_PAY_API_URL}/v1/billing/create`, {
+    const response = await fetch(`${env.ABACATE_PAY_API_URL}/v2/billing/create`, {
       method: "POST",
       headers,
       body: JSON.stringify({
