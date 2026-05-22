@@ -11,6 +11,8 @@
     "build": "bun run --filter '*' build",
     "dev:auth-api": "bun run --cwd apps/auth-api dev",
     "dev:auth-web": "bun run --cwd apps/auth-web dev",
+    "dev:checkout-api": "bun run --cwd apps/checkout-api dev",
+    "dev:checkout-web": "bun run --cwd apps/checkout-web dev",
     "test": "bun test"
   },
   "devDependencies": {

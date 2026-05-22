@@ -6,8 +6,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/sga_db
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/sga_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       AUTH_COOKIE_NAME: sg_auth
       AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
       AUTH_PUBLIC_URL: ${AUTH_PUBLIC_URL:-http://localhost:3001}
@@ -26,6 +26,41 @@ services:
       redis:
         condition: service_healthy
 
+  sga-checkout-api:
+    build:
+      context: .
+      dockerfile: apps/checkout-api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/sga_db}
+      DATABASE_HOME: ${DATABASE_HOME:-postgres://postgres:postgres@postgres:5432/sg_home}
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-with-at-least-32-chars}
+      AUTH_COOKIE_NAME: sg_auth
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      ABACATE_PAY_API_KEY: ${ABACATE_PAY_API_KEY:-}
+      ABACATE_PAY_WEBHOOK_SECRET: ${ABACATE_PAY_WEBHOOK_SECRET:-}
+      CHECKOUT_WEB_URL: ${CHECKOUT_WEB_URL:-http://localhost:5174}
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  checkout-web:
+    build:
+      context: .
+      dockerfile: apps/checkout-web/Dockerfile
+      args:
+        VITE_AUTH_API_URL: ${VITE_AUTH_API_URL:-${AUTH_PUBLIC_URL:-http://localhost:3001}}
+        VITE_CHECKOUT_API_URL: ${VITE_CHECKOUT_API_URL:-http://localhost:3002}
+        VITE_AUTH_WEB_URL: ${VITE_AUTH_WEB_URL:-http://localhost:5173}
+    ports:
+      - "5174:80"
+    depends_on:
+      - sga-auth-api
+      - sga-checkout-api
+
   auth-web:
     build:
       context: .
@@ -40,9 +75,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: sga_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-sga_db}
     ports:
       - "5432:5432"
     volumes:
