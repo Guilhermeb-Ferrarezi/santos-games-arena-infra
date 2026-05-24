@@ -567,17 +567,19 @@ function PaymentPage({
     return { name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, zipCode, street, addressNumber, neighborhood, city, addressState, ...override };
   }
 
+  useEffect(() => {
+    if (!submitted) return;
+    setErrors(validate({ name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, zipCode, street, addressNumber, neighborhood, city, addressState }, paymentMethod));
+  }, [submitted, name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, zipCode, street, addressNumber, neighborhood, city, addressState, paymentMethod]);
+
   function updateField(field: keyof FieldErrors, setter: (v: string) => void, newValue: string) {
     setter(newValue);
-    if (submitted) {
-      const e = validate(currentAddrVals({ [field]: newValue }), paymentMethod);
-      setErrors((prev) => ({ ...prev, [field]: e[field] }));
-    }
   }
 
   function handleBlur(field: keyof FieldErrors, currentValue: string) {
+    if (submitted) return;
     const e = validate(currentAddrVals({ [field]: currentValue }), paymentMethod);
-    if (submitted || e[field]) setErrors((prev) => ({ ...prev, [field]: e[field] }));
+    if (e[field]) setErrors((prev) => ({ ...prev, [field]: e[field] }));
   }
 
   function handleSubmit(ev: React.FormEvent) {
