@@ -417,11 +417,23 @@ function PaymentPage({
     return d.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
   }
 
+  function validateCpf(raw: string): boolean {
+    const d = raw.replace(/\D/g, "");
+    if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+    const calc = (len: number) => {
+      let sum = 0;
+      for (let i = 0; i < len; i++) sum += parseInt(d[i]) * (len + 1 - i);
+      const r = (sum * 10) % 11;
+      return r === 10 ? 0 : r;
+    };
+    return calc(9) === parseInt(d[9]) && calc(10) === parseInt(d[10]);
+  }
+
   function validate(vals: { name: string; email: string; taxId: string; cellphone: string }) {
     const e: FieldErrors = {};
     if (vals.name.trim().length < 3) e.name = "Informe seu nome completo.";
     if (!/\S+@\S+\.\S+/.test(vals.email.trim())) e.email = "E-mail inválido.";
-    if (vals.taxId.replace(/\D/g, "").length !== 11) e.taxId = "CPF inválido.";
+    if (!validateCpf(vals.taxId)) e.taxId = "CPF inválido.";
     if (vals.cellphone.replace(/\D/g, "").length < 10) e.cellphone = "Telefone inválido.";
     return e;
   }
