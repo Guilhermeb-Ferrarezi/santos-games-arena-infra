@@ -1,6 +1,6 @@
 import type { PostgresClient } from "@santos-games/postgres";
 
-export type OrderStatus = "pending" | "paid" | "failed" | "expired";
+export type OrderStatus = "pending" | "paid" | "failed" | "expired" | "cancelled";
 
 export type Order = {
   id: number;
@@ -103,7 +103,7 @@ export function createOrderRepository(client: PostgresClient) {
   async function cancelById(id: number, userId: number): Promise<boolean> {
     const [row] = await client<{ id: number }[]>`
       update checkout_orders
-      set status = 'expired', updated_at = now()
+      set status = 'cancelled', updated_at = now()
       where id = ${id} and user_id = ${userId} and status = 'pending'
       returning id
     `;

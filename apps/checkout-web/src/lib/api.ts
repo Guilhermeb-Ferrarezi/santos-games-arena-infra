@@ -18,7 +18,7 @@ export type Order = {
   productId: string;
   description: string;
   amountCents: number;
-  status: "pending" | "paid" | "expired" | "failed";
+  status: "pending" | "paid" | "expired" | "failed" | "cancelled";
   pixCode: string | null;
   pixCodeBase64: string | null;
   pixExpiresAt: string | null;

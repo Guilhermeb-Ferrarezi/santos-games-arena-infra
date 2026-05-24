@@ -201,6 +201,7 @@ function PixModal({
 }) {
   const [copied, setCopied] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState(false);
   const copyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleCopy() {
@@ -214,7 +215,14 @@ function PixModal({
   async function handleCancel() {
     if (order.status === "pending") {
       setCancelling(true);
-      try { await cancelOrder(order.id); } catch { /* ignora, navega mesmo assim */ }
+      setCancelError(false);
+      try {
+        await cancelOrder(order.id);
+      } catch {
+        setCancelling(false);
+        setCancelError(true);
+        return;
+      }
     }
     onClose();
   }
@@ -235,7 +243,7 @@ function PixModal({
     );
   }
 
-  if (order.status === "expired" || order.status === "failed") {
+  if (order.status === "expired" || order.status === "failed" || order.status === "cancelled") {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
         <div className="w-full max-w-sm border border-border/60 bg-surface-1 p-8 text-center flex flex-col items-center gap-4">
@@ -287,12 +295,17 @@ function PixModal({
             Aguardando confirmação do pagamento…
           </p>
 
+          {cancelError && (
+            <p className="text-center text-xs text-destructive">
+              Erro ao cancelar. Tente novamente.
+            </p>
+          )}
           <button
             onClick={handleCancel}
             disabled={cancelling}
             className="w-full py-1.5 text-center text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
           >
-            {cancelling ? "Cancelando…" : "Cancelar"}
+            {cancelling ? "Cancelando…" : "Cancelar pagamento"}
           </button>
         </div>
       </div>
@@ -315,6 +328,7 @@ function OrderModal({
     queryKey: ["order", orderId],
     queryFn: () => getOrder(orderId),
     refetchInterval: (q) => (q.state.data?.status === "pending" ? 3000 : false),
+    // para de fazer polling quando cancelado/expirado/pago
     initialData: initialPix
       ? {
           id: orderId,
