@@ -7,4 +7,11 @@ export async function runMigrations(client: PostgresClient): Promise<void> {
     ADD COLUMN IF NOT EXISTS user_email TEXT
   `;
 
+  await client`
+    ALTER TABLE checkout_customers
+    ADD COLUMN IF NOT EXISTS name TEXT,
+    ADD COLUMN IF NOT EXISTS tax_id TEXT,
+    ADD COLUMN IF NOT EXISTS cellphone TEXT
+  `;
+
 }

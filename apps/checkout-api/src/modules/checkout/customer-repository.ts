@@ -6,7 +6,16 @@ type CustomerRow = {
   abacate_customer_id: string;
   user_login: string | null;
   user_email: string | null;
+  name: string | null;
+  tax_id: string | null;
+  cellphone: string | null;
   created_at: string;
+};
+
+export type CustomerInfo = {
+  name: string | null;
+  taxId: string | null;
+  cellphone: string | null;
 };
 
 export type CustomerRepository = ReturnType<typeof createCustomerRepository>;
@@ -20,6 +29,21 @@ export function createCustomerRepository(client: PostgresClient) {
     `;
 
     return row?.abacate_customer_id ?? null;
+  }
+
+  async function getInfo(userId: number): Promise<CustomerInfo | null> {
+    const [row] = await client<CustomerRow[]>`
+      select name, tax_id, cellphone from checkout_customers
+      where user_id = ${userId}
+      limit 1
+    `;
+
+    if (!row) return null;
+    return {
+      name: row.name ?? null,
+      taxId: row.tax_id ?? null,
+      cellphone: row.cellphone ?? null
+    };
   }
 
   async function save(
@@ -38,5 +62,16 @@ export function createCustomerRepository(client: PostgresClient) {
     `;
   }
 
-  return { findByUserId, save };
+  async function saveInfo(
+    userId: number,
+    info: { name: string; taxId: string; cellphone: string }
+  ): Promise<void> {
+    await client`
+      update checkout_customers
+      set name = ${info.name}, tax_id = ${info.taxId}, cellphone = ${info.cellphone}
+      where user_id = ${userId}
+    `;
+  }
+
+  return { findByUserId, getInfo, save, saveInfo };
 }

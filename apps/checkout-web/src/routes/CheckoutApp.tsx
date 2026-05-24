@@ -6,11 +6,13 @@ import {
   cancelOrder,
   createOrder,
   createPayIntent,
+  getCustomerInfo,
   getOrder,
   getPayIntent,
   getSession,
   listProducts,
   type CreateOrderResult,
+  type CustomerInfo,
   type Order,
   type Product,
   type Session
@@ -385,6 +387,7 @@ const inputCls =
 function PaymentPage({
   product,
   session,
+  savedCustomer,
   onCancel,
   onSubmit,
   isPending,
@@ -392,15 +395,24 @@ function PaymentPage({
 }: {
   product: Product;
   session: Session;
+  savedCustomer?: CustomerInfo | null;
   onCancel: () => void;
   onSubmit: (data: { name: string; email: string; taxId: string; cellphone: string }) => void;
   isPending: boolean;
   mutationError?: string;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(savedCustomer?.name ?? "");
   const [email, setEmail] = useState(session.user?.email ?? "");
-  const [taxId, setTaxId] = useState("");
-  const [cellphone, setCellphone] = useState("");
+  const [taxId, setTaxId] = useState(
+    savedCustomer?.taxId
+      ? savedCustomer.taxId.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+      : ""
+  );
+  const [cellphone, setCellphone] = useState(
+    savedCustomer?.cellphone
+      ? savedCustomer.cellphone.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3")
+      : ""
+  );
 
   type FieldErrors = { name?: string; email?: string; taxId?: string; cellphone?: string };
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -798,6 +810,13 @@ export function CheckoutApp() {
     retry: false
   });
 
+  const { data: savedCustomer } = useQuery({
+    queryKey: ["customer-info"],
+    queryFn: getCustomerInfo,
+    enabled: !!session?.authenticated,
+    retry: false
+  });
+
   const intentMutation = useMutation({
     mutationFn: (productId: number) => createPayIntent(productId),
     onSuccess: (result) => navigate(`/pay/${result.token}`)
@@ -841,6 +860,7 @@ export function CheckoutApp() {
       <PaymentPage
         product={appState.product}
         session={session}
+        savedCustomer={savedCustomer}
         isPending={buyMutation.isPending}
         mutationError={buyMutation.error ? "Erro ao gerar PIX. Tente novamente." : undefined}
         onCancel={() => navigate("/")}
@@ -857,6 +877,7 @@ export function CheckoutApp() {
         <PaymentPage
           product={appState.product}
           session={session}
+          savedCustomer={savedCustomer}
           isPending={false}
           onCancel={() => navigate("/")}
           onSubmit={() => {}}

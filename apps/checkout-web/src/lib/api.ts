@@ -64,6 +64,17 @@ export async function cancelOrder(orderId: number): Promise<void> {
   await checkoutApi.delete(`/order/${orderId}`);
 }
 
+export type CustomerInfo = {
+  name: string | null;
+  taxId: string | null;
+  cellphone: string | null;
+};
+
+export async function getCustomerInfo(): Promise<CustomerInfo | null> {
+  const { data } = await checkoutApi.get<{ customer: CustomerInfo | null }>("/customer/me");
+  return data.customer;
+}
+
 export async function createPayIntent(productId: number): Promise<{ token: string }> {
   const { data } = await checkoutApi.post<{ token: string }>("/pay/intent", { productId });
   return data;

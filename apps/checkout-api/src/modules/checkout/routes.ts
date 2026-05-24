@@ -34,6 +34,16 @@ export function registerCheckoutRoutes(
     return { products: list };
   });
 
+  server.get("/customer/me", async (request, reply) => {
+    const token = request.cookies[env.AUTH_COOKIE_NAME];
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    const session = await verifySessionToken(token, env);
+    if (!session) return reply.code(401).send({ error: "unauthorized" });
+
+    const info = await customers.getInfo(session.userId);
+    return { customer: info };
+  });
+
   // ── Pay intent (link temporário via Redis) ────────────────────────────────
   server.post("/pay/intent", async (request, reply) => {
     const token = request.cookies[env.AUTH_COOKIE_NAME];
@@ -118,6 +128,14 @@ export function registerCheckoutRoutes(
       brCodeBase64: pix.brCodeBase64,
       expiresAt: pix.expiresAt
     });
+
+    if (customer) {
+      await customers.saveInfo(session.userId, {
+        name: customer.name,
+        taxId: customer.taxId,
+        cellphone: customer.cellphone
+      });
+    }
 
     return reply.code(201).send({
       orderId: order.id,
