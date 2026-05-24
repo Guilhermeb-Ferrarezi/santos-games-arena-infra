@@ -96,6 +96,24 @@ export function registerCheckoutRoutes(
     });
   });
 
+  server.delete("/order/:id", async (request, reply) => {
+    const token = request.cookies[env.AUTH_COOKIE_NAME];
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+
+    const session = await verifySessionToken(token, env);
+    if (!session) return reply.code(401).send({ error: "unauthorized" });
+
+    const { id } = request.params as { id: string };
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) return reply.code(400).send({ error: "invalid_id" });
+
+    const cancelled = await orders.cancelById(orderId, session.userId);
+    if (!cancelled) return reply.code(404).send({ error: "not_found" });
+
+    await pixStore.remove(orderId);
+    return { ok: true };
+  });
+
   server.get("/order/:id", async (request, reply) => {
     const token = request.cookies[env.AUTH_COOKIE_NAME];
     if (!token) {

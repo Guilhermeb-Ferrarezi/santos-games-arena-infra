@@ -9,6 +9,7 @@ export type Product = {
   id: number;
   name: string;
   description: string;
+  features: string[];
   amountCents: number;
 };
 
@@ -57,4 +58,8 @@ export async function createOrder(
 export async function getOrder(orderId: number): Promise<Order> {
   const { data } = await checkoutApi.get<Order>(`/order/${orderId}`);
   return data;
+}
+
+export async function cancelOrder(orderId: number): Promise<void> {
+  await checkoutApi.delete(`/order/${orderId}`);
 }

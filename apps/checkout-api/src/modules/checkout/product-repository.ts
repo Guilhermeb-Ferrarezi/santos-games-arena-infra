@@ -4,6 +4,7 @@ export type CheckoutProduct = {
   id: number;
   name: string;
   description: string;
+  features: string[];
   amountCents: number;
 };
 
@@ -12,7 +13,7 @@ export type ProductRepository = ReturnType<typeof createProductRepository>;
 export function createProductRepository(sql: Sql) {
   async function listActive(): Promise<CheckoutProduct[]> {
     const rows = await sql<CheckoutProduct[]>`
-      SELECT id, name, description, amount_cents AS "amountCents"
+      SELECT id, name, description, COALESCE(features, '[]'::jsonb) AS features, amount_cents AS "amountCents"
       FROM checkout_products
       WHERE active = true
       ORDER BY created_at ASC
@@ -22,7 +23,7 @@ export function createProductRepository(sql: Sql) {
 
   async function findById(id: number): Promise<CheckoutProduct | null> {
     const rows = await sql<CheckoutProduct[]>`
-      SELECT id, name, description, amount_cents AS "amountCents"
+      SELECT id, name, description, COALESCE(features, '[]'::jsonb) AS features, amount_cents AS "amountCents"
       FROM checkout_products
       WHERE id = ${id} AND active = true
     `;

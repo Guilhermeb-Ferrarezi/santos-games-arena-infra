@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
+  cancelOrder,
   createOrder,
   getOrder,
   getSession,
@@ -199,6 +200,7 @@ function PixModal({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const copyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleCopy() {
@@ -207,6 +209,14 @@ function PixModal({
       if (copyRef.current) clearTimeout(copyRef.current);
       copyRef.current = setTimeout(() => setCopied(false), 2500);
     });
+  }
+
+  async function handleCancel() {
+    if (order.status === "pending") {
+      setCancelling(true);
+      try { await cancelOrder(order.id); } catch { /* ignora, navega mesmo assim */ }
+    }
+    onClose();
   }
 
   if (order.status === "paid") {
@@ -278,10 +288,11 @@ function PixModal({
           </p>
 
           <button
-            onClick={onClose}
-            className="w-full py-1.5 text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="w-full py-1.5 text-center text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
           >
-            Cancelar
+            {cancelling ? "Cancelando…" : "Cancelar"}
           </button>
         </div>
       </div>
@@ -429,11 +440,9 @@ function PaymentPage({
     });
   }
 
-  const features = [
-    product.description,
-    "Acesso imediato após confirmação",
-    "Pagamento PIX sem juros"
-  ].filter(Boolean);
+  const features = product.features?.length > 0
+    ? product.features
+    : [product.description, "Acesso imediato após confirmação", "Pagamento PIX sem juros"].filter(Boolean);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

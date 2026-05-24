@@ -100,5 +100,15 @@ export function createOrderRepository(client: PostgresClient) {
     return row ? toOrder(row) : null;
   }
 
-  return { create, updateBilling, updateStatus, findById, findByBillingId };
+  async function cancelById(id: number, userId: number): Promise<boolean> {
+    const [row] = await client<{ id: number }[]>`
+      update checkout_orders
+      set status = 'expired', updated_at = now()
+      where id = ${id} and user_id = ${userId} and status = 'pending'
+      returning id
+    `;
+    return !!row;
+  }
+
+  return { create, updateBilling, updateStatus, findById, findByBillingId, cancelById };
 }
