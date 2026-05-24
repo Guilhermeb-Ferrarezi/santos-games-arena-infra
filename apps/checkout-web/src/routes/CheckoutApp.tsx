@@ -201,7 +201,7 @@ function PixModal({
   pixCode: string;
   pixCodeBase64: string;
   pixExpiresAt: string;
-  onClose: () => void;
+  onClose: (paid: boolean) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -228,7 +228,7 @@ function PixModal({
         return;
       }
     }
-    onClose();
+    onClose(false);
   }
 
   if (order.status === "paid") {
@@ -241,7 +241,7 @@ function PixModal({
           <h2 className="text-3xl font-display font-bold text-success">Pagamento confirmado!</h2>
           <p className="text-sm text-muted-foreground">{order.description}</p>
           <p className="text-2xl font-display font-bold text-primary">{formatCurrency(order.amountCents)}</p>
-          <Button className="mt-2 w-full" onClick={onClose}>Ver outros planos</Button>
+          <Button className="mt-2 w-full" onClick={() => onClose(true)}>Ver outros planos</Button>
         </div>
       </div>
     );
@@ -252,7 +252,7 @@ function PixModal({
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
         <div className="w-full max-w-sm border border-border/60 bg-surface-1 p-8 text-center flex flex-col items-center gap-4">
           <p className="text-destructive font-semibold">PIX expirado ou inválido.</p>
-          <Button onClick={onClose}>Criar novo pedido</Button>
+          <Button onClick={() => onClose(false)}>Tentar novamente</Button>
         </div>
       </div>
     );
@@ -326,7 +326,7 @@ function OrderModal({
 }: {
   orderId: number;
   initialPix?: CreateOrderResult;
-  onClose: () => void;
+  onClose: (paid: boolean) => void;
 }) {
   const { data: order } = useQuery({
     queryKey: ["order", orderId],
@@ -363,7 +363,7 @@ function OrderModal({
         pixCode={order.pixCode}
         pixCodeBase64={order.pixCodeBase64}
         pixExpiresAt={order.pixExpiresAt}
-        onClose={onClose}
+        onClose={(paid) => onClose(paid)}
       />
     );
   }
@@ -374,7 +374,7 @@ function OrderModal({
       pixCode=""
       pixCodeBase64=""
       pixExpiresAt={new Date(Date.now() + 1000).toISOString()}
-      onClose={onClose}
+      onClose={(paid) => onClose(paid)}
     />
   );
 }
@@ -450,16 +450,18 @@ function PaymentPage({
     return e;
   }
 
-  function handleChange<T>(setter: (v: T) => void, field: keyof FieldErrors) {
-    return (v: T) => {
-      setter(v);
-      if (submitted) setErrors((prev) => ({ ...prev, [field]: undefined }));
-    };
+  function updateField(field: keyof FieldErrors, setter: (v: string) => void, newValue: string) {
+    setter(newValue);
+    if (submitted) {
+      const vals = { name, email, taxId, cellphone, [field]: newValue };
+      const e = validate(vals);
+      setErrors((prev) => ({ ...prev, [field]: e[field] }));
+    }
   }
 
-  function handleBlur(field: keyof FieldErrors) {
+  function handleBlur(field: keyof FieldErrors, currentValue: string) {
     if (!submitted) {
-      const vals = { name, email, taxId, cellphone };
+      const vals = { name, email, taxId, cellphone, [field]: currentValue };
       const e = validate(vals);
       if (e[field]) setErrors((prev) => ({ ...prev, [field]: e[field] }));
     }
@@ -539,8 +541,8 @@ function PaymentPage({
                   placeholder="Seu nome completo"
                   value={name}
                   className={inputCls}
-                  onChange={(e) => handleChange(setName, "name")(e.target.value)}
-                  onBlur={() => handleBlur("name")}
+                  onChange={(e) => updateField("name", setName, e.target.value)}
+                  onBlur={(e) => handleBlur("name", e.target.value)}
                   disabled={isPending}
                 />
               </FormField>
@@ -551,8 +553,8 @@ function PaymentPage({
                   placeholder="seu@email.com"
                   value={email}
                   className={inputCls}
-                  onChange={(e) => handleChange(setEmail, "email")(e.target.value)}
-                  onBlur={() => handleBlur("email")}
+                  onChange={(e) => updateField("email", setEmail, e.target.value)}
+                  onBlur={(e) => handleBlur("email", e.target.value)}
                   disabled={isPending}
                 />
               </FormField>
@@ -564,8 +566,8 @@ function PaymentPage({
                   placeholder="000.000.000-00"
                   value={taxId}
                   className={inputCls}
-                  onChange={(e) => handleChange(setTaxId, "taxId")(formatCpf(e.target.value))}
-                  onBlur={() => handleBlur("taxId")}
+                  onChange={(e) => updateField("taxId", setTaxId, formatCpf(e.target.value))}
+                  onBlur={(e) => handleBlur("taxId", e.target.value)}
                   disabled={isPending}
                 />
               </FormField>
@@ -576,8 +578,8 @@ function PaymentPage({
                   placeholder="(00) 00000-0000"
                   value={cellphone}
                   className={inputCls}
-                  onChange={(e) => handleChange(setCellphone, "cellphone")(formatPhone(e.target.value))}
-                  onBlur={() => handleBlur("cellphone")}
+                  onChange={(e) => updateField("cellphone", setCellphone, formatPhone(e.target.value))}
+                  onBlur={(e) => handleBlur("cellphone", e.target.value)}
                   disabled={isPending}
                 />
               </FormField>
@@ -904,7 +906,16 @@ export function CheckoutApp() {
         <OrderModal
           orderId={appState.orderId}
           initialPix={appState.initialPix}
-          onClose={() => navigate("/")}
+          onClose={(paid) => {
+            if (paid) {
+              navigate("/");
+            } else {
+              // cancelado: volta para PaymentPage do mesmo produto
+              buyMutation.reset();
+              window.history.pushState({}, "", "/");
+              setAppState({ page: "payment", product: appState.product });
+            }
+          }}
         />
       </>
     );
