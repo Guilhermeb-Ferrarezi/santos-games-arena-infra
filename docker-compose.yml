@@ -41,10 +41,13 @@ services:
       ABACATE_PAY_API_KEY: ${ABACATE_PAY_API_KEY:-}
       ABACATE_PAY_WEBHOOK_SECRET: ${ABACATE_PAY_WEBHOOK_SECRET:-}
       CHECKOUT_WEB_URL: ${CHECKOUT_WEB_URL:-http://localhost:5174}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     ports:
       - "3002:3002"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   checkout-web:
