@@ -76,16 +76,35 @@ function Spinner() {
 }
 
 function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "elo" | "amex" | "unknown" }) {
-  if (brand === "unknown") return null;
-  const src = `/${brand}.svg`;
-  const dims: Record<string, { w: number; h: number }> = {
-    visa: { w: 38, h: 13 },
-    mastercard: { w: 32, h: 20 },
-    amex: { w: 38, h: 13 },
-    elo: { w: 36, h: 12 }
-  };
-  const d = dims[brand];
-  return <img src={src} alt={brand} width={d.w} height={d.h} style={{ display: "block" }} />;
+  if (brand === "visa") return (
+    <svg width="38" height="13" viewBox="0 0 48 16" xmlns="http://www.w3.org/2000/svg">
+      <text x="0" y="13" fontFamily="Arial, sans-serif" fontSize="16" fontWeight="900" fontStyle="italic" fill="#1A1F71" letterSpacing="-0.5">VISA</text>
+    </svg>
+  );
+  if (brand === "mastercard") return (
+    <svg width="32" height="20" viewBox="0 0 38 24" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="14" cy="12" r="10" fill="#EB001B"/>
+      <circle cx="24" cy="12" r="10" fill="#F79E1B"/>
+      <path d="M19 4.8a10 10 0 0 1 0 14.4A10 10 0 0 1 19 4.8z" fill="#FF5F00"/>
+    </svg>
+  );
+  if (brand === "amex") return (
+    <svg width="38" height="14" viewBox="0 0 48 16" xmlns="http://www.w3.org/2000/svg">
+      <rect width="48" height="16" rx="2" fill="#2E77BC"/>
+      <text x="4" y="11.5" fontFamily="Arial, sans-serif" fontSize="8.5" fontWeight="700" fill="white" letterSpacing="0.3">AMERICAN</text>
+      <text x="4" y="14.5" fontFamily="Arial, sans-serif" fontSize="5" fontWeight="400" fill="white" letterSpacing="2">EXPRESS</text>
+    </svg>
+  );
+  if (brand === "elo") return (
+    <svg width="32" height="20" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="24" rx="3" fill="#000"/>
+      <circle cx="12" cy="12" r="6" fill="#FFD500"/>
+      <circle cx="12" cy="12" r="4" fill="#000"/>
+      <path d="M12 6 A6 6 0 0 1 18 12" stroke="#FFD500" strokeWidth="2" fill="none"/>
+      <text x="20" y="16" fontFamily="Arial, sans-serif" fontSize="10" fontWeight="700" fill="white">elo</text>
+    </svg>
+  );
+  return null;
 }
 
 // ── UI primitives ─────────────────────────────────────────────────────────────
