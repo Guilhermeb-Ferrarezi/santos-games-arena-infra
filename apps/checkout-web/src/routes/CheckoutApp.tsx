@@ -429,122 +429,194 @@ function PaymentPage({
     });
   }
 
+  const features = [
+    product.description,
+    "Acesso imediato após confirmação",
+    "Pagamento PIX sem juros"
+  ].filter(Boolean);
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <SgHeader userLogin={session.user?.login} onBack={onCancel} />
 
-      <main className="flex flex-1 flex-col items-center px-4 py-8">
-        <div className="w-full max-w-sm">
-          {/* Product info */}
-          <div className="mb-6 text-center">
-            <span className="inline-block border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest text-primary">
-              DADOS PARA PAGAMENTO
-            </span>
-            <h2 className="mt-3 text-2xl font-display font-bold">{product.name}</h2>
-            <p className="mt-1 text-4xl font-display font-bold text-primary">
-              {formatCurrency(product.amountCents)}
-            </p>
-          </div>
+      <main className="flex flex-1 justify-center px-4 py-8">
+        <div className="flex w-full max-w-4xl items-start gap-10">
 
-          {/* Método de pagamento */}
-          <div className="mb-4 grid grid-cols-2 gap-2">
+          {/* ── Coluna esquerda: form ── */}
+          <div className="w-full min-w-0 max-w-sm">
+            {/* Mobile: product info */}
+            <div className="mb-6 text-center md:hidden">
+              <span className="inline-block border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest text-primary">
+                DADOS PARA PAGAMENTO
+              </span>
+              <h2 className="mt-3 text-2xl font-display font-bold">{product.name}</h2>
+              <p className="mt-1 text-4xl font-display font-bold text-primary">
+                {formatCurrency(product.amountCents)}
+              </p>
+            </div>
+
+            {/* Desktop: só o label */}
+            <div className="mb-5 hidden md:block">
+              <span className="inline-block border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest text-primary">
+                DADOS PARA PAGAMENTO
+              </span>
+            </div>
+
+            {/* Método de pagamento */}
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled
+                className="flex items-center justify-center gap-2 border border-border/30 bg-surface-1 px-3 py-3 text-sm text-muted-foreground/40 cursor-not-allowed select-none"
+              >
+                <CreditCardIcon />
+                <span>Cartão</span>
+                <span className="border border-border/30 px-1 text-[9px] uppercase tracking-wide">Em breve</span>
+              </button>
+              <div className="flex items-center justify-center gap-2 border border-[#32BCAD]/60 bg-[#32BCAD]/10 px-3 py-3 text-sm font-semibold text-[#32BCAD]">
+                <PixIcon />
+                <span>PIX</span>
+              </div>
+            </div>
+
+            {/* Form */}
+            <form
+              onSubmit={handleSubmit}
+              className="border border-border/60 bg-surface-1 p-5 flex flex-col gap-4"
+            >
+              <FormField label="Nome completo" error={errors.name}>
+                <input
+                  type="text"
+                  placeholder="Seu nome completo"
+                  value={name}
+                  className={inputCls}
+                  onChange={(e) => handleChange(setName, "name")(e.target.value)}
+                  onBlur={() => handleBlur("name")}
+                  disabled={isPending}
+                />
+              </FormField>
+
+              <FormField label="E-mail" error={errors.email}>
+                <input
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  className={inputCls}
+                  onChange={(e) => handleChange(setEmail, "email")(e.target.value)}
+                  onBlur={() => handleBlur("email")}
+                  disabled={isPending}
+                />
+              </FormField>
+
+              <FormField label="CPF" error={errors.taxId}>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                  value={taxId}
+                  className={inputCls}
+                  onChange={(e) => handleChange(setTaxId, "taxId")(formatCpf(e.target.value))}
+                  onBlur={() => handleBlur("taxId")}
+                  disabled={isPending}
+                />
+              </FormField>
+
+              <FormField label="Telefone" error={errors.cellphone}>
+                <input
+                  type="tel"
+                  placeholder="(00) 00000-0000"
+                  value={cellphone}
+                  className={inputCls}
+                  onChange={(e) => handleChange(setCellphone, "cellphone")(formatPhone(e.target.value))}
+                  onBlur={() => handleBlur("cellphone")}
+                  disabled={isPending}
+                />
+              </FormField>
+
+              {mutationError && (
+                <p className="text-xs text-destructive border border-destructive/30 bg-destructive/10 px-3 py-2">
+                  {mutationError}
+                </p>
+              )}
+
+              <Button type="submit" size="lg" className="w-full gap-2" disabled={isPending}>
+                {isPending ? (
+                  <>
+                    <Spinner />
+                    <span>Gerando PIX…</span>
+                  </>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <PixIcon size={16} />
+                    Gerar PIX
+                  </span>
+                )}
+              </Button>
+            </form>
+
             <button
               type="button"
-              disabled
-              className="flex items-center justify-center gap-2 border border-border/30 bg-surface-1 px-3 py-3 text-sm text-muted-foreground/40 cursor-not-allowed select-none"
+              onClick={onCancel}
+              className="mt-3 w-full py-2 text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <CreditCardIcon />
-              <span>Cartão</span>
-              <span className="border border-border/30 px-1 text-[9px] uppercase tracking-wide">Em breve</span>
+              Cancelar
             </button>
-            <div className="flex items-center justify-center gap-2 border border-[#32BCAD]/60 bg-[#32BCAD]/10 px-3 py-3 text-sm font-semibold text-[#32BCAD]">
-              <PixIcon />
-              <span>PIX</span>
+          </div>
+
+          {/* ── Coluna direita: card de resumo ── */}
+          <div className="hidden flex-1 md:block">
+            <div className="border border-border/60 bg-surface-1 p-6 flex flex-col gap-5">
+              {/* Nome do produto */}
+              <h2 className="text-3xl font-display font-bold leading-tight">{product.name}</h2>
+
+              {/* Features */}
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                  O que está incluso
+                </p>
+                {features.map((f, i) => (
+                  <div key={i} className="flex items-start gap-2.5 py-1">
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center text-[#32BCAD]">
+                      <CheckIcon size={13} />
+                    </span>
+                    <span className="text-sm text-muted-foreground leading-snug">{f}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Divisor */}
+              <div className="border-t border-border/40" />
+
+              {/* Preços */}
+              <div className="flex flex-col gap-2 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(product.amountCents)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Taxa (0%)</span>
+                  <span>R$ 0,00</span>
+                </div>
+              </div>
+
+              {/* Divisor */}
+              <div className="border-t border-border/40" />
+
+              {/* Total */}
+              <div className="flex justify-between font-semibold">
+                <span>Total hoje</span>
+                <span className="text-primary text-lg font-display font-bold">
+                  {formatCurrency(product.amountCents)}
+                </span>
+              </div>
+
+              {/* Nota */}
+              <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+                Pagamento único. Ao pagar, você concorda com os termos de uso da Santos Games.
+              </p>
             </div>
           </div>
 
-          {/* Form */}
-          <form
-            onSubmit={handleSubmit}
-            className="border border-border/60 bg-surface-1 p-5 flex flex-col gap-4"
-          >
-            <FormField label="Nome completo" error={errors.name}>
-              <input
-                type="text"
-                placeholder="Seu nome completo"
-                value={name}
-                className={inputCls}
-                onChange={(e) => handleChange(setName, "name")(e.target.value)}
-                onBlur={() => handleBlur("name")}
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField label="E-mail" error={errors.email}>
-              <input
-                type="email"
-                placeholder="seu@email.com"
-                value={email}
-                className={inputCls}
-                onChange={(e) => handleChange(setEmail, "email")(e.target.value)}
-                onBlur={() => handleBlur("email")}
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField label="CPF" error={errors.taxId}>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="000.000.000-00"
-                value={taxId}
-                className={inputCls}
-                onChange={(e) => handleChange(setTaxId, "taxId")(formatCpf(e.target.value))}
-                onBlur={() => handleBlur("taxId")}
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField label="Telefone" error={errors.cellphone}>
-              <input
-                type="tel"
-                placeholder="(00) 00000-0000"
-                value={cellphone}
-                className={inputCls}
-                onChange={(e) => handleChange(setCellphone, "cellphone")(formatPhone(e.target.value))}
-                onBlur={() => handleBlur("cellphone")}
-                disabled={isPending}
-              />
-            </FormField>
-
-            {mutationError && (
-              <p className="text-xs text-destructive border border-destructive/30 bg-destructive/10 px-3 py-2">
-                {mutationError}
-              </p>
-            )}
-
-            <Button type="submit" size="lg" className="w-full gap-2" disabled={isPending}>
-              {isPending ? (
-                <>
-                  <Spinner />
-                  <span>Gerando PIX…</span>
-                </>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <PixIcon size={16} />
-                  Gerar PIX
-                </span>
-              )}
-            </Button>
-          </form>
-
-          <button
-            type="button"
-            onClick={onCancel}
-            className="mt-3 w-full py-2 text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Cancelar
-          </button>
         </div>
       </main>
     </div>
