@@ -34,6 +34,12 @@ export type CreateTransparentPixInput = {
   amountCents: number;
   description: string;
   expiresIn?: number;
+  customer?: {
+    name: string;
+    email: string;
+    taxId: string;
+    cellphone: string;
+  };
 };
 
 export type CreateTransparentPixResult =
@@ -152,7 +158,8 @@ export function createAbacatePayClient(
         data: {
           amount: input.amountCents,
           description: input.description,
-          expiresIn: input.expiresIn ?? 3600
+          expiresIn: input.expiresIn ?? 3600,
+          ...(input.customer ? { customer: input.customer } : {})
         }
       })
     });

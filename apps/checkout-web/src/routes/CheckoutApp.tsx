@@ -24,6 +24,11 @@ function redirectToLogin() {
   window.location.href = `${authWebUrl}?client_id=checkout-web&redirect_uri=${encodeURIComponent(redirectUri)}`;
 }
 
+function navigate(path: string, state: object = {}) {
+  window.history.pushState(state, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate", { state }));
+}
+
 function LoadingScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
@@ -39,7 +44,7 @@ function SgHeader({ userLogin }: { userLogin?: string }) {
         <div className="flex items-center gap-3">
           <img
             src="/logo.png"
-            alt="Santos Games"
+            alt=""
             className="h-9 w-9 object-contain"
             style={{ filter: "brightness(0) invert(1)" }}
           />
@@ -72,7 +77,11 @@ function PixCountdown({ expiresAt }: { expiresAt: string }) {
   const seconds = remaining % 60;
 
   if (remaining === 0) {
-    return <span className="inline-flex items-center border px-2 py-0.5 text-xs font-semibold text-destructive border-destructive/40 bg-destructive/10">PIX expirado</span>;
+    return (
+      <span className="inline-flex items-center border px-2 py-0.5 text-xs font-semibold text-destructive border-destructive/40 bg-destructive/10">
+        PIX expirado
+      </span>
+    );
   }
 
   const badgeClass =
@@ -89,16 +98,146 @@ function PixCountdown({ expiresAt }: { expiresAt: string }) {
   );
 }
 
+// ── Tela: form de dados do cliente ────────────────────────────────────────────
+
+function CustomerFormPage({
+  product,
+  userLogin,
+  onConfirm,
+  onCancel
+}: {
+  product: Product;
+  userLogin: string;
+  onConfirm: (taxId: string, cellphone: string) => void;
+  onCancel: () => void;
+}) {
+  const [taxId, setTaxId] = useState("");
+  const [cellphone, setCellphone] = useState("");
+  const [error, setError] = useState("");
+
+  function formatCpf(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+    return digits
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  }
+
+  function formatPhone(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+    if (digits.length <= 10) {
+      return digits
+        .replace(/(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{4})(\d)/, "$1-$2");
+    }
+    return digits
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{5})(\d)/, "$1-$2");
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const rawCpf = taxId.replace(/\D/g, "");
+    const rawPhone = cellphone.replace(/\D/g, "");
+    if (rawCpf.length !== 11) {
+      setError("CPF inválido.");
+      return;
+    }
+    if (rawPhone.length < 10) {
+      setError("Telefone inválido.");
+      return;
+    }
+    onConfirm(rawCpf, rawPhone);
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <SgHeader userLogin={userLogin} />
+
+      <main className="mx-auto w-full max-w-md px-4 py-10">
+        <div className="mb-6 text-center">
+          <span className="inline-block border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-widest text-primary mb-2">
+            Dados para pagamento
+          </span>
+          <h2 className="text-2xl font-display font-bold">{product.name}</h2>
+          <p className="mt-1 text-3xl font-display font-bold text-primary">
+            {formatCurrency(product.amountCents)}
+          </p>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-lg border border-border/60 bg-surface-1 p-5 flex flex-col gap-4"
+        >
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+              CPF
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              value={taxId}
+              onChange={(e) => {
+                setError("");
+                setTaxId(formatCpf(e.target.value));
+              }}
+              className="w-full bg-surface-2 border border-border/60 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/60"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+              Telefone
+            </label>
+            <input
+              type="text"
+              inputMode="tel"
+              placeholder="(00) 00000-0000"
+              value={cellphone}
+              onChange={(e) => {
+                setError("");
+                setCellphone(formatPhone(e.target.value));
+              }}
+              className="w-full bg-surface-2 border border-border/60 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/60"
+            />
+          </div>
+
+          {error && (
+            <p className="text-xs text-destructive">{error}</p>
+          )}
+
+          <Button type="submit" className="w-full" size="lg">
+            Gerar PIX
+          </Button>
+        </form>
+
+        <Button
+          variant="ghost"
+          className="mt-2 w-full text-muted-foreground hover:text-foreground"
+          onClick={onCancel}
+        >
+          Cancelar
+        </Button>
+      </main>
+    </div>
+  );
+}
+
+// ── Tela: pagamento PIX ───────────────────────────────────────────────────────
+
 function PixPaymentPage({
   order,
   pixCode,
   pixCodeBase64,
-  pixExpiresAt
+  pixExpiresAt,
+  onBack
 }: {
   order: Order;
   pixCode: string;
   pixCodeBase64: string;
   pixExpiresAt: string;
+  onBack: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -123,11 +262,7 @@ function PixPaymentPage({
             <h2 className="text-3xl font-display font-bold text-success">Pagamento confirmado!</h2>
             <p className="text-muted-foreground">{order.description}</p>
             <p className="text-2xl font-bold text-primary">{formatCurrency(order.amountCents)}</p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => window.history.pushState({}, "", "/")}
-            >
+            <Button variant="outline" className="mt-4" onClick={() => navigate("/")}>
               Ver outros planos
             </Button>
           </div>
@@ -143,9 +278,7 @@ function PixPaymentPage({
         <div className="flex flex-1 items-center justify-center p-4">
           <div className="flex flex-col items-center gap-4 text-center">
             <p className="text-muted-foreground">PIX expirado ou inválido.</p>
-            <Button onClick={() => window.history.pushState({}, "", "/")}>
-              Criar novo pedido
-            </Button>
+            <Button onClick={() => navigate("/")}>Criar novo pedido</Button>
           </div>
         </div>
       </div>
@@ -168,12 +301,8 @@ function PixPaymentPage({
         </div>
 
         <div className="rounded-lg border border-border/60 bg-surface-1 overflow-hidden">
-          <div className="flex justify-center bg-white p-6 shadow-inner">
-            <img
-              src={pixCodeBase64}
-              alt="QR Code PIX"
-              className="h-52 w-52"
-            />
+          <div className="flex justify-center bg-white p-6">
+            <img src={pixCodeBase64} alt="QR Code PIX" className="h-52 w-52" />
           </div>
 
           <div className="p-5 flex flex-col gap-4 border-t border-border/40">
@@ -187,7 +316,10 @@ function PixPaymentPage({
             </Button>
 
             <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-              <span className="inline-block h-1.5 w-1.5 bg-success animate-pulse" style={{ borderRadius: "50%" }} />
+              <span
+                className="inline-block h-1.5 w-1.5 bg-success animate-pulse"
+                style={{ borderRadius: "50%" }}
+              />
               Aguardando confirmação do pagamento…
             </p>
           </div>
@@ -196,16 +328,26 @@ function PixPaymentPage({
         <Button
           variant="ghost"
           className="mt-2 w-full text-muted-foreground hover:text-foreground"
-          onClick={() => window.history.pushState({}, "", "/")}
+          onClick={onBack}
         >
-          Voltar aos planos
+          Cancelar e voltar aos planos
         </Button>
       </main>
     </div>
   );
 }
 
-function OrderStatusPage({ orderId, initialPix }: { orderId: number; initialPix?: CreateOrderResult }) {
+// ── Tela: status do pedido ────────────────────────────────────────────────────
+
+function OrderStatusPage({
+  orderId,
+  initialPix,
+  onBack
+}: {
+  orderId: number;
+  initialPix?: CreateOrderResult;
+  onBack: () => void;
+}) {
   const { data: order } = useQuery({
     queryKey: ["order", orderId],
     queryFn: () => getOrder(orderId),
@@ -230,17 +372,19 @@ function OrderStatusPage({ orderId, initialPix }: { orderId: number; initialPix?
 
   if (!order) return <LoadingScreen />;
 
-  const pixCode = order.pixCode;
-  const pixCodeBase64 = order.pixCodeBase64;
-  const pixExpiresAt = order.pixExpiresAt;
-
-  if (order.status === "pending" && pixCode && pixCodeBase64 && pixExpiresAt) {
+  if (
+    order.status === "pending" &&
+    order.pixCode &&
+    order.pixCodeBase64 &&
+    order.pixExpiresAt
+  ) {
     return (
       <PixPaymentPage
         order={order}
-        pixCode={pixCode}
-        pixCodeBase64={pixCodeBase64}
-        pixExpiresAt={pixExpiresAt}
+        pixCode={order.pixCode}
+        pixCodeBase64={order.pixCodeBase64}
+        pixExpiresAt={order.pixExpiresAt}
+        onBack={onBack}
       />
     );
   }
@@ -253,16 +397,14 @@ function OrderStatusPage({ orderId, initialPix }: { orderId: number; initialPix?
           {order.status === "paid" && (
             <>
               <p className="text-3xl font-display font-bold text-success">Pagamento confirmado!</p>
-              <Button variant="outline" onClick={() => window.history.pushState({}, "", "/")}>
-                Ver outros planos
-              </Button>
+              <Button variant="outline" onClick={() => navigate("/")}>Ver outros planos</Button>
             </>
           )}
-          {order.status === "pending" && (
-            <p className="text-muted-foreground">PIX expirado. Crie um novo pedido.</p>
-          )}
-          {(order.status === "expired" || order.status === "failed") && (
-            <p className="text-muted-foreground">Pedido expirado ou inválido.</p>
+          {(order.status === "pending" || order.status === "expired" || order.status === "failed") && (
+            <>
+              <p className="text-muted-foreground">PIX expirado. Crie um novo pedido.</p>
+              <Button onClick={() => navigate("/")}>Voltar aos planos</Button>
+            </>
           )}
         </div>
       </div>
@@ -270,7 +412,15 @@ function OrderStatusPage({ orderId, initialPix }: { orderId: number; initialPix?
   );
 }
 
-function ProductCard({ product, onBuy, loading }: { product: Product; onBuy: (id: number) => void; loading: boolean }) {
+// ── Tela: lista de produtos ───────────────────────────────────────────────────
+
+function ProductCard({
+  product,
+  onBuy
+}: {
+  product: Product;
+  onBuy: (id: number) => void;
+}) {
   return (
     <div className="flex flex-col rounded-lg border border-border/60 bg-surface-1 overflow-hidden transition-all hover:border-primary/40">
       <div className="flex-1 p-6">
@@ -281,46 +431,24 @@ function ProductCard({ product, onBuy, loading }: { product: Product; onBuy: (id
         </p>
       </div>
       <div className="px-6 pb-6">
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={() => onBuy(product.id)}
-          disabled={loading}
-        >
-          {loading ? "Processando…" : "Comprar agora"}
+        <Button className="w-full" size="lg" onClick={() => onBuy(product.id)}>
+          Comprar agora
         </Button>
       </div>
     </div>
   );
 }
 
-function ProductsPage({ userLogin }: { userLogin: string }) {
-  const queryClient = useQueryClient();
+function ProductsPage({
+  userLogin,
+  onSelectProduct
+}: {
+  userLogin: string;
+  onSelectProduct: (product: Product) => void;
+}) {
   const { data: products = [], isLoading, error } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts
-  });
-
-  const [pendingProductId, setPendingProductId] = useState<number | null>(null);
-
-  const buyMutation = useMutation({
-    mutationFn: createOrder,
-    onSuccess: (result) => {
-      queryClient.setQueryData(["order", result.orderId], {
-        id: result.orderId,
-        productId: "",
-        description: "",
-        amountCents: result.amountCents,
-        status: "pending",
-        pixCode: result.pixCode,
-        pixCodeBase64: result.pixCodeBase64,
-        pixExpiresAt: result.pixExpiresAt,
-        createdAt: new Date().toISOString()
-      });
-      window.history.pushState({ pix: result }, "", `/order/${result.orderId}`);
-      window.dispatchEvent(new PopStateEvent("popstate", { state: { pix: result } }));
-    },
-    onSettled: () => setPendingProductId(null)
   });
 
   if (isLoading) return <LoadingScreen />;
@@ -342,59 +470,47 @@ function ProductsPage({ userLogin }: { userLogin: string }) {
       <main className="mx-auto max-w-4xl px-4 py-10">
         <div className="mb-10 text-center">
           <h2 className="text-4xl font-display font-bold">Escolha seu plano</h2>
-          <p className="mt-2 text-muted-foreground">
-            Pague via PIX e tenha acesso imediato.
-          </p>
+          <p className="mt-2 text-muted-foreground">Pague via PIX e tenha acesso imediato.</p>
         </div>
 
         {products.length === 0 ? (
-          <p className="text-center text-muted-foreground">
-            Nenhum produto disponível no momento.
-          </p>
+          <p className="text-center text-muted-foreground">Nenhum produto disponível no momento.</p>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                loading={pendingProductId === p.id && buyMutation.isPending}
-                onBuy={(id) => {
-                  setPendingProductId(id);
-                  buyMutation.mutate(id);
-                }}
-              />
+              <ProductCard key={p.id} product={p} onBuy={() => onSelectProduct(p)} />
             ))}
           </div>
-        )}
-
-        {buyMutation.isError && (
-          <p className="mt-4 text-center text-sm text-destructive">
-            Erro ao processar pedido. Tente novamente.
-          </p>
         )}
       </main>
     </div>
   );
 }
 
-export function CheckoutApp() {
-  const [orderIdFromPath, setOrderIdFromPath] = useState<number | null>(null);
-  const [initialPix, setInitialPix] = useState<CreateOrderResult | undefined>(undefined);
+// ── App root ──────────────────────────────────────────────────────────────────
 
+type AppState =
+  | { page: "products" }
+  | { page: "customer-form"; product: Product }
+  | { page: "order"; orderId: number; initialPix?: CreateOrderResult };
+
+export function CheckoutApp() {
+  const queryClient = useQueryClient();
+
+  const [appState, setAppState] = useState<AppState>({ page: "products" });
+
+  // Sync URL → state
   useEffect(() => {
     function handlePath() {
       const match = window.location.pathname.match(/^\/order\/(\d+)$/);
       if (match) {
-        const id = parseInt(match[1], 10);
-        setOrderIdFromPath(id);
+        const orderId = parseInt(match[1], 10);
         const state = window.history.state as { pix?: CreateOrderResult } | null;
-        setInitialPix(state?.pix);
+        setAppState({ page: "order", orderId, initialPix: state?.pix });
       } else {
-        setOrderIdFromPath(null);
-        setInitialPix(undefined);
+        setAppState({ page: "products" });
       }
     }
-
     handlePath();
     window.addEventListener("popstate", handlePath);
     return () => window.removeEventListener("popstate", handlePath);
@@ -406,6 +522,30 @@ export function CheckoutApp() {
     retry: false
   });
 
+  const buyMutation = useMutation({
+    mutationFn: ({
+      productId,
+      customer
+    }: {
+      productId: number;
+      customer: { taxId: string; cellphone: string };
+    }) => createOrder(productId, customer),
+    onSuccess: (result) => {
+      queryClient.setQueryData(["order", result.orderId], {
+        id: result.orderId,
+        productId: "",
+        description: "",
+        amountCents: result.amountCents,
+        status: "pending",
+        pixCode: result.pixCode,
+        pixCodeBase64: result.pixCodeBase64,
+        pixExpiresAt: result.pixExpiresAt,
+        createdAt: new Date().toISOString()
+      });
+      navigate(`/order/${result.orderId}`, { pix: result });
+    }
+  });
+
   if (isLoading) return <LoadingScreen />;
 
   if (!session?.authenticated || !session.user) {
@@ -413,9 +553,37 @@ export function CheckoutApp() {
     return <LoadingScreen />;
   }
 
-  if (orderIdFromPath !== null) {
-    return <OrderStatusPage orderId={orderIdFromPath} initialPix={initialPix} />;
+  const { login: userLogin } = session.user;
+
+  if (appState.page === "customer-form") {
+    return (
+      <CustomerFormPage
+        product={appState.product}
+        userLogin={userLogin}
+        onCancel={() => setAppState({ page: "products" })}
+        onConfirm={(taxId, cellphone) => {
+          buyMutation.mutate({ productId: appState.product.id, customer: { taxId, cellphone } });
+        }}
+      />
+    );
   }
 
-  return <ProductsPage userLogin={session.user.login} />;
+  if (appState.page === "order") {
+    return (
+      <OrderStatusPage
+        orderId={appState.orderId}
+        initialPix={appState.initialPix}
+        onBack={() => {
+          navigate("/");
+        }}
+      />
+    );
+  }
+
+  return (
+    <ProductsPage
+      userLogin={userLogin}
+      onSelectProduct={(product) => setAppState({ page: "customer-form", product })}
+    />
+  );
 }

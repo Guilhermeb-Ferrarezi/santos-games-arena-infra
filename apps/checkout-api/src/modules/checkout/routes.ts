@@ -9,7 +9,11 @@ import type { PixStore } from "./pix-store";
 import type { ProductRepository } from "./product-repository";
 
 const createOrderBodySchema = z.object({
-  productId: z.number().int().positive()
+  productId: z.number().int().positive(),
+  customer: z.object({
+    taxId: z.string().trim().min(11).max(14),
+    cellphone: z.string().trim().min(10)
+  }).optional()
 });
 
 export function registerCheckoutRoutes(
@@ -54,9 +58,19 @@ export function registerCheckoutRoutes(
       amountCents: product.amountCents
     });
 
+    const customer = parsed.data.customer
+      ? {
+          name: session.login,
+          email: session.email,
+          taxId: parsed.data.customer.taxId.replace(/\D/g, ""),
+          cellphone: parsed.data.customer.cellphone
+        }
+      : undefined;
+
     const pix = await abacatePay.createTransparentPix({
       amountCents: product.amountCents,
-      description: product.name
+      description: product.name,
+      customer
     });
 
     if (!pix.ok) {

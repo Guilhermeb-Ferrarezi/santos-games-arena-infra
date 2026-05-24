@@ -46,8 +46,11 @@ export async function listProducts(): Promise<Product[]> {
   return data.products;
 }
 
-export async function createOrder(productId: number): Promise<CreateOrderResult> {
-  const { data } = await checkoutApi.post<CreateOrderResult>("/order", { productId });
+export async function createOrder(
+  productId: number,
+  customer?: { taxId: string; cellphone: string }
+): Promise<CreateOrderResult> {
+  const { data } = await checkoutApi.post<CreateOrderResult>("/order", { productId, customer });
   return data;
 }
 
