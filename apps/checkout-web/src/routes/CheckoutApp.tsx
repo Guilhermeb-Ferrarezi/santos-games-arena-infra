@@ -790,7 +790,7 @@ function PaymentPage({
                         </div>
                       </FormField>
 
-                      <FormField label="Logradouro" error={errors.street}>
+                      <FormField label="Rua / Endereço" error={errors.street}>
                         <input
                           type="text"
                           placeholder="Rua, Avenida…"
