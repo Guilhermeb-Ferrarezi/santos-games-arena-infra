@@ -23,5 +23,9 @@ export function createPayIntentStore(redis: RedisClient) {
     return isNaN(id) ? null : id;
   }
 
-  return { create, get };
+  async function remove(token: string): Promise<void> {
+    await redis.del(key(token));
+  }
+
+  return { create, get, remove };
 }

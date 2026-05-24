@@ -72,6 +72,8 @@ export function registerCheckoutRoutes(
     const product = await products.findById(productId);
     if (!product) return reply.code(404).send({ error: "product_not_found" });
 
+    await payIntentStore.remove(token);
+
     return { product };
   });
 

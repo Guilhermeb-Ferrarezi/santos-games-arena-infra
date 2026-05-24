@@ -704,7 +704,7 @@ function IntentLoader({
 
 // ── Products page ─────────────────────────────────────────────────────────────
 
-function ProductCard({ product, onBuy }: { product: Product; onBuy: () => void }) {
+function ProductCard({ product, onBuy, isLoading }: { product: Product; onBuy: () => void; isLoading?: boolean }) {
   return (
     <div className="flex flex-col border border-border/60 bg-surface-1 overflow-hidden transition-all hover:border-primary/40">
       <div className="flex-1 p-6">
@@ -715,8 +715,15 @@ function ProductCard({ product, onBuy }: { product: Product; onBuy: () => void }
         </p>
       </div>
       <div className="border-t border-border/40 px-6 pb-6 pt-4">
-        <Button className="w-full" size="lg" onClick={onBuy}>
-          Comprar agora
+        <Button className="w-full gap-2" size="lg" onClick={onBuy} disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Spinner />
+              <span>Aguarde…</span>
+            </>
+          ) : (
+            "Comprar agora"
+          )}
         </Button>
       </div>
     </div>
@@ -725,10 +732,14 @@ function ProductCard({ product, onBuy }: { product: Product; onBuy: () => void }
 
 function ProductsPage({
   session,
-  onSelectProduct
+  onSelectProduct,
+  intentLoading,
+  intentError
 }: {
   session: Session;
   onSelectProduct: (product: Product) => void;
+  intentLoading?: boolean;
+  intentError?: boolean;
 }) {
   const { data: products = [], isLoading, error } = useQuery({
     queryKey: ["products"],
@@ -752,12 +763,18 @@ function ProductsPage({
             <p className="mt-2 text-muted-foreground">Pague via PIX e tenha acesso imediato.</p>
           </div>
 
+          {intentError && (
+            <p className="mb-6 text-center text-sm text-destructive border border-destructive/30 bg-destructive/10 px-4 py-2 max-w-md mx-auto">
+              Erro ao iniciar pagamento. Tente novamente.
+            </p>
+          )}
+
           {products.length === 0 ? (
             <p className="text-center text-muted-foreground">Nenhum produto disponível no momento.</p>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {products.map((p) => (
-                <ProductCard key={p.id} product={p} onBuy={() => onSelectProduct(p)} />
+                <ProductCard key={p.id} product={p} onBuy={() => onSelectProduct(p)} isLoading={intentLoading} />
               ))}
             </div>
           )}
@@ -874,14 +891,16 @@ export function CheckoutApp() {
   if (appState.page === "order") {
     return (
       <>
-        <PaymentPage
-          product={appState.product}
-          session={session}
-          savedCustomer={savedCustomer}
-          isPending={false}
-          onCancel={() => navigate("/")}
-          onSubmit={() => {}}
-        />
+        <div className="pointer-events-none select-none">
+          <PaymentPage
+            product={appState.product}
+            session={session}
+            savedCustomer={savedCustomer}
+            isPending={false}
+            onCancel={() => {}}
+            onSubmit={() => {}}
+          />
+        </div>
         <OrderModal
           orderId={appState.orderId}
           initialPix={appState.initialPix}
@@ -895,6 +914,8 @@ export function CheckoutApp() {
     <ProductsPage
       session={session}
       onSelectProduct={(product) => intentMutation.mutate(product.id)}
+      intentLoading={intentMutation.isPending}
+      intentError={intentMutation.isError}
     />
   );
 }

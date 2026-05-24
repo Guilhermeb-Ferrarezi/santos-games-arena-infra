@@ -67,9 +67,12 @@ export function createCustomerRepository(client: PostgresClient) {
     info: { name: string; taxId: string; cellphone: string }
   ): Promise<void> {
     await client`
-      update checkout_customers
-      set name = ${info.name}, tax_id = ${info.taxId}, cellphone = ${info.cellphone}
-      where user_id = ${userId}
+      insert into checkout_customers (user_id, abacate_customer_id, name, tax_id, cellphone)
+      values (${userId}, '', ${info.name}, ${info.taxId}, ${info.cellphone})
+      on conflict (user_id) do update set
+        name = ${info.name},
+        tax_id = ${info.taxId},
+        cellphone = ${info.cellphone}
     `;
   }
 
