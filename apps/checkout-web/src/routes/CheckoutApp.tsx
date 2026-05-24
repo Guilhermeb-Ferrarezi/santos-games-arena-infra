@@ -386,143 +386,6 @@ function OrderModal({
 const inputCls =
   "w-full bg-surface-2 border border-border/60 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/60 transition-colors";
 
-type AddressParts = {
-  street: string;
-  number: string;
-  neighborhood: string;
-  city: string;
-  state: string;
-  zipCode: string;
-};
-
-let mapsLoaderPromise: Promise<boolean> | null = null;
-
-function loadMapsApi(): Promise<boolean> {
-  if (mapsLoaderPromise) return mapsLoaderPromise;
-  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
-  if (!key) return Promise.resolve(false);
-  mapsLoaderPromise = new Promise<boolean>((resolve) => {
-    if ((window as unknown as { google?: unknown }).google) { resolve(true); return; }
-    const cb = `__gmCb${Date.now()}`;
-    (window as unknown as Record<string, () => void>)[cb] = () => resolve(true);
-    const el = document.createElement("script");
-    el.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=${cb}`;
-    el.onerror = () => resolve(false);
-    document.head.appendChild(el);
-  });
-  return mapsLoaderPromise;
-}
-
-function AddressAutocomplete({
-  value,
-  onChange,
-  onSelect,
-  disabled,
-  error
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSelect: (parts: AddressParts) => void;
-  disabled?: boolean;
-  error?: string;
-}) {
-  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
-  const [open, setOpen] = useState(false);
-  const [mapsReady, setMapsReady] = useState(false);
-  const serviceRef = useRef<google.maps.places.AutocompleteService | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    loadMapsApi().then((ok) => {
-      if (ok) {
-        serviceRef.current = new google.maps.places.AutocompleteService();
-        setMapsReady(true);
-      }
-    });
-  }, []);
-
-  function handleInput(val: string) {
-    onChange(val);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (val.length < 3 || !serviceRef.current) { setSuggestions([]); setOpen(false); return; }
-    debounceRef.current = setTimeout(() => {
-      serviceRef.current!.getPlacePredictions(
-        { input: val, componentRestrictions: { country: "br" }, types: ["address"] },
-        (preds, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && preds) {
-            setSuggestions(preds);
-            setOpen(true);
-          } else {
-            setSuggestions([]);
-            setOpen(false);
-          }
-        }
-      );
-    }, 300);
-  }
-
-  function handleSelect(pred: google.maps.places.AutocompletePrediction) {
-    onChange(pred.structured_formatting.main_text);
-    setOpen(false);
-    setSuggestions([]);
-    const map = new google.maps.Map(document.createElement("div"));
-    const svc = new google.maps.places.PlacesService(map);
-    svc.getDetails(
-      { placeId: pred.place_id, fields: ["address_components"] },
-      (result, st) => {
-        if (st !== google.maps.places.PlacesServiceStatus.OK || !result?.address_components) return;
-        const parts: AddressParts = { street: "", number: "", neighborhood: "", city: "", state: "", zipCode: "" };
-        for (const c of result.address_components) {
-          if (c.types.includes("street_number")) parts.number = c.long_name;
-          if (c.types.includes("route")) parts.street = c.long_name;
-          if (c.types.includes("sublocality_level_1") || c.types.includes("sublocality")) parts.neighborhood = c.long_name;
-          if (c.types.includes("administrative_area_level_2")) parts.city = c.long_name;
-          if (c.types.includes("administrative_area_level_1")) parts.state = c.short_name;
-          if (c.types.includes("postal_code")) parts.zipCode = c.long_name.replace(/\D/g, "");
-        }
-        onSelect(parts);
-      }
-    );
-  }
-
-  void mapsReady;
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        placeholder="Rua, Avenida…"
-        value={value}
-        className={inputCls}
-        onChange={(e) => handleInput(e.target.value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        disabled={disabled}
-        autoComplete="off"
-      />
-      {error && <span className="text-[11px] text-destructive">{error}</span>}
-      {open && suggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-0.5 border border-border/60 bg-surface-1 shadow-xl overflow-hidden">
-          {suggestions.map((s) => (
-            <button
-              key={s.place_id}
-              type="button"
-              className="w-full px-3 py-2.5 text-left hover:bg-surface-2 flex flex-col gap-0.5 border-b border-border/20 last:border-0"
-              onMouseDown={() => handleSelect(s)}
-            >
-              <span className="text-sm font-medium text-foreground">{s.structured_formatting.main_text}</span>
-              <span className="text-xs text-muted-foreground">{s.structured_formatting.secondary_text}</span>
-            </button>
-          ))}
-          <div className="px-3 py-1.5 flex items-center gap-1 bg-surface-2">
-            <span className="text-[10px] text-muted-foreground/60">Sugestões via</span>
-            <span className="text-[10px] font-semibold text-muted-foreground/80">Google</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function formatCardNumber(v: string): string {
   return v.replace(/\D/g, "").slice(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ");
 }
@@ -927,29 +790,17 @@ function PaymentPage({
                         </div>
                       </FormField>
 
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                          Logradouro
-                        </label>
-                        <AddressAutocomplete
+                      <FormField label="Logradouro" error={errors.street}>
+                        <input
+                          type="text"
+                          placeholder="Rua, Avenida…"
                           value={street}
-                          onChange={(v) => updateField("street", setStreet, v)}
-                          onSelect={(parts) => {
-                            if (parts.street) setStreet(parts.street);
-                            if (parts.number) setAddressNumber(parts.number);
-                            if (parts.neighborhood) setNeighborhood(parts.neighborhood);
-                            if (parts.city) setCity(parts.city);
-                            if (parts.state) setAddressState(parts.state);
-                            if (parts.zipCode) setZipCode(
-                              parts.zipCode.length === 8
-                                ? `${parts.zipCode.slice(0, 5)}-${parts.zipCode.slice(5)}`
-                                : parts.zipCode
-                            );
-                          }}
+                          className={inputCls}
+                          onChange={(e) => updateField("street", setStreet, e.target.value)}
+                          onBlur={(e) => handleBlur("street", e.target.value)}
                           disabled={isPending}
-                          error={errors.street}
                         />
-                      </div>
+                      </FormField>
 
                       <div className="grid grid-cols-2 gap-3">
                         <FormField label="Número" error={errors.addressNumber}>
