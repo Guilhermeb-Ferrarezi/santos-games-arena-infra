@@ -40,6 +40,16 @@ export type CreateCardOrderResult = {
   status: "pending" | "paid";
 };
 
+export type CardAddress = {
+  zipCode: string;
+  street: string;
+  number: string;
+  complement?: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+};
+
 const authApi = axios.create({ baseURL: "/api/auth", withCredentials: true });
 const checkoutApi = axios.create({ baseURL: "/api/checkout", withCredentials: true });
 
@@ -64,13 +74,15 @@ export async function createOrder(
 export async function createCardOrder(
   productId: number,
   customer: { name: string; email: string; taxId: string; cellphone: string },
-  card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string; installments?: number }
+  card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string; installments?: number },
+  address?: CardAddress
 ): Promise<CreateCardOrderResult> {
   const { data } = await checkoutApi.post<CreateCardOrderResult>("/order", {
     productId,
     method: "card",
     customer,
-    card
+    card,
+    address
   });
   return data;
 }

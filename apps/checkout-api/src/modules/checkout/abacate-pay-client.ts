@@ -46,12 +46,23 @@ export type CreateTransparentPixResult =
   | { ok: true; pixId: string; brCode: string; brCodeBase64: string; expiresAt: string }
   | { ok: false; error: string };
 
+export type CardAddress = {
+  zipCode: string;
+  street: string;
+  number: string;
+  complement?: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+};
+
 export type CreateTransparentCardInput = {
   amountCents: number;
   description: string;
   installments?: number;
   card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string };
   customer: { name: string; email: string; taxId: string; cellphone: string };
+  address?: CardAddress;
 };
 
 export type CreateTransparentCardResult =
@@ -207,7 +218,8 @@ export function createAbacatePayClient(
           description: input.description,
           installments: input.installments ?? 1,
           card: input.card,
-          customer: input.customer
+          customer: input.customer,
+          ...(input.address ? { address: { ...input.address, country: "BR" } } : {})
         }
       })
     });

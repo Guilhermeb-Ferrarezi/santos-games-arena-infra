@@ -25,6 +25,15 @@ const createOrderBodySchema = z.object({
     expiryYear: z.string().length(4),
     cvv: z.string().min(3).max(4),
     installments: z.number().int().min(1).max(12).default(1)
+  }).optional(),
+  address: z.object({
+    zipCode: z.string().trim().min(8).max(9),
+    street: z.string().trim().min(2).max(200),
+    number: z.string().trim().min(1).max(20),
+    complement: z.string().trim().max(100).optional(),
+    neighborhood: z.string().trim().min(2).max(100),
+    city: z.string().trim().min(2).max(100),
+    state: z.string().trim().length(2)
   }).optional()
 });
 
@@ -130,6 +139,7 @@ export function registerCheckoutRoutes(
       }
 
       const cardInput = parsed.data.card!;
+      const addr = parsed.data.address;
       const cardResult = await abacatePay.createTransparentCard({
         amountCents: product.amountCents,
         description: product.name,
@@ -141,7 +151,18 @@ export function registerCheckoutRoutes(
           expiryYear: cardInput.expiryYear,
           cvv: cardInput.cvv
         },
-        customer
+        customer,
+        address: addr
+          ? {
+              zipCode: addr.zipCode.replace(/\D/g, ""),
+              street: addr.street,
+              number: addr.number,
+              complement: addr.complement,
+              neighborhood: addr.neighborhood,
+              city: addr.city,
+              state: addr.state.toUpperCase()
+            }
+          : undefined
       });
 
       if (!cardResult.ok) {
