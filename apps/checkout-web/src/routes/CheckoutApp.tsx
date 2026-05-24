@@ -503,7 +503,7 @@ function PaymentPage({
     cardNumber?: string; cardExpiry?: string; cardCvv?: string;
     zipCode?: string; street?: string; addressNumber?: string; neighborhood?: string; city?: string; addressState?: string;
   };
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const [touched, setTouched] = useState<Partial<Record<keyof FieldErrors, true>>>({});
   const [submitted, setSubmitted] = useState(false);
 
   function formatCpf(v: string) {
@@ -582,44 +582,38 @@ function PaymentPage({
     return e;
   }
 
-  function currentAddrVals(override: Partial<Record<keyof FieldErrors, string>> = {}) {
-    return { name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, zipCode, street, addressNumber, neighborhood, city, addressState, ...override };
-  }
+  const allErrors = validate(
+    { name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, zipCode, street, addressNumber, neighborhood, city, addressState },
+    paymentMethod
+  );
+  const errors: FieldErrors = submitted
+    ? allErrors
+    : Object.fromEntries(Object.entries(allErrors).filter(([k]) => touched[k as keyof FieldErrors]));
 
-  useEffect(() => {
-    if (!submitted) return;
-    setErrors(validate({ name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, zipCode, street, addressNumber, neighborhood, city, addressState }, paymentMethod));
-  }, [submitted, name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, zipCode, street, addressNumber, neighborhood, city, addressState, paymentMethod]);
-
-  function updateField(field: keyof FieldErrors, setter: (v: string) => void, newValue: string) {
+  function updateField(_field: keyof FieldErrors, setter: (v: string) => void, newValue: string) {
     setter(newValue);
   }
 
-  function handleBlur(field: keyof FieldErrors, currentValue: string) {
-    if (submitted) return;
-    const e = validate(currentAddrVals({ [field]: currentValue }), paymentMethod);
-    if (e[field]) setErrors((prev) => ({ ...prev, [field]: e[field] }));
+  function handleBlur(field: keyof FieldErrors) {
+    setTouched((prev) => ({ ...prev, [field]: true }));
   }
 
   function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     setSubmitted(true);
-    const vals = currentAddrVals();
-    const e = validate(vals, paymentMethod);
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
+    if (Object.keys(allErrors).length > 0) return;
     if (paymentMethod === "card") {
       const [mm, yy] = cardExpiry.split("/");
       onSubmit({
-        name: vals.name.trim(),
-        email: vals.email.trim(),
-        taxId: vals.taxId.replace(/\D/g, ""),
-        cellphone: vals.cellphone.replace(/\D/g, ""),
+        name: name.trim(),
+        email: email.trim(),
+        taxId: taxId.replace(/\D/g, ""),
+        cellphone: cellphone.replace(/\D/g, ""),
         method: "card",
         saveInfo,
         card: {
           number: cardNumber.replace(/\s/g, ""),
-          holderName: vals.name.trim(),
+          holderName: name.trim(),
           expiryMonth: mm,
           expiryYear: `20${yy}`,
           cvv: cardCvv
@@ -636,10 +630,10 @@ function PaymentPage({
       });
     } else {
       onSubmit({
-        name: vals.name.trim(),
-        email: vals.email.trim(),
-        taxId: vals.taxId.replace(/\D/g, ""),
-        cellphone: vals.cellphone.replace(/\D/g, ""),
+        name: name.trim(),
+        email: email.trim(),
+        taxId: taxId.replace(/\D/g, ""),
+        cellphone: cellphone.replace(/\D/g, ""),
         method: "pix",
         saveInfo
       });
@@ -711,7 +705,7 @@ function PaymentPage({
                   value={name}
                   className={inputCls}
                   onChange={(e) => updateField("name", setName, e.target.value)}
-                  onBlur={(e) => handleBlur("name", e.target.value)}
+                  onBlur={() => handleBlur("name")}
                   disabled={isPending}
                 />
               </FormField>
@@ -723,7 +717,7 @@ function PaymentPage({
                   value={email}
                   className={inputCls}
                   onChange={(e) => updateField("email", setEmail, e.target.value)}
-                  onBlur={(e) => handleBlur("email", e.target.value)}
+                  onBlur={() => handleBlur("email")}
                   disabled={isPending}
                 />
               </FormField>
@@ -736,7 +730,7 @@ function PaymentPage({
                   value={taxId}
                   className={inputCls}
                   onChange={(e) => updateField("taxId", setTaxId, formatCpf(e.target.value))}
-                  onBlur={(e) => handleBlur("taxId", e.target.value)}
+                  onBlur={() => handleBlur("taxId")}
                   disabled={isPending}
                 />
               </FormField>
@@ -748,7 +742,7 @@ function PaymentPage({
                   value={cellphone}
                   className={inputCls}
                   onChange={(e) => updateField("cellphone", setCellphone, formatPhone(e.target.value))}
-                  onBlur={(e) => handleBlur("cellphone", e.target.value)}
+                  onBlur={() => handleBlur("cellphone")}
                   disabled={isPending}
                 />
               </FormField>
@@ -764,7 +758,7 @@ function PaymentPage({
                         value={cardNumber}
                         className={inputCls + " pr-14"}
                         onChange={(e) => updateField("cardNumber", setCardNumber, formatCardNumber(e.target.value))}
-                        onBlur={(e) => handleBlur("cardNumber", e.target.value)}
+                        onBlur={() => handleBlur("cardNumber")}
                         disabled={isPending}
                       />
                       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
@@ -782,7 +776,7 @@ function PaymentPage({
                         value={cardExpiry}
                         className={inputCls}
                         onChange={(e) => updateField("cardExpiry", setCardExpiry, formatExpiry(e.target.value))}
-                        onBlur={(e) => handleBlur("cardExpiry", e.target.value)}
+                        onBlur={() => handleBlur("cardExpiry")}
                         disabled={isPending}
                       />
                     </FormField>
@@ -795,7 +789,7 @@ function PaymentPage({
                         maxLength={4}
                         className={inputCls}
                         onChange={(e) => updateField("cardCvv", setCardCvv, e.target.value.replace(/\D/g, "").slice(0, 4))}
-                        onBlur={(e) => handleBlur("cardCvv", e.target.value)}
+                        onBlur={() => handleBlur("cardCvv")}
                         disabled={isPending}
                       />
                     </FormField>
@@ -820,7 +814,7 @@ function PaymentPage({
                               updateField("zipCode", setZipCode, formatted);
                               if (formatted.replace(/\D/g, "").length === 8) lookupCep(formatted);
                             }}
-                            onBlur={(e) => handleBlur("zipCode", e.target.value)}
+                            onBlur={() => handleBlur("zipCode")}
                             disabled={isPending}
                           />
                           {cepLoading && (
@@ -838,7 +832,7 @@ function PaymentPage({
                           value={street}
                           className={inputCls}
                           onChange={(e) => updateField("street", setStreet, e.target.value)}
-                          onBlur={(e) => handleBlur("street", e.target.value)}
+                          onBlur={() => handleBlur("street")}
                           disabled={isPending}
                         />
                       </FormField>
@@ -851,7 +845,7 @@ function PaymentPage({
                             value={addressNumber}
                             className={inputCls}
                             onChange={(e) => updateField("addressNumber", setAddressNumber, e.target.value)}
-                            onBlur={(e) => handleBlur("addressNumber", e.target.value)}
+                            onBlur={() => handleBlur("addressNumber")}
                             disabled={isPending}
                           />
                         </FormField>
@@ -874,7 +868,7 @@ function PaymentPage({
                           value={neighborhood}
                           className={inputCls}
                           onChange={(e) => updateField("neighborhood", setNeighborhood, e.target.value)}
-                          onBlur={(e) => handleBlur("neighborhood", e.target.value)}
+                          onBlur={() => handleBlur("neighborhood")}
                           disabled={isPending}
                         />
                       </FormField>
@@ -887,7 +881,7 @@ function PaymentPage({
                             value={city}
                             className={inputCls}
                             onChange={(e) => updateField("city", setCity, e.target.value)}
-                            onBlur={(e) => handleBlur("city", e.target.value)}
+                            onBlur={() => handleBlur("city")}
                             disabled={isPending}
                           />
                         </FormField>
@@ -896,7 +890,7 @@ function PaymentPage({
                             value={addressState}
                             className={inputCls}
                             onChange={(e) => updateField("addressState", setAddressState, e.target.value)}
-                            onBlur={(e) => handleBlur("addressState", e.target.value)}
+                            onBlur={() => handleBlur("addressState")}
                             disabled={isPending}
                           >
                             <option value="">UF</option>
