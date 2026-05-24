@@ -30,6 +30,16 @@ export type CreateBillingResult =
   | { ok: true; billingId: string; checkoutUrl: string; amountCents: number }
   | { ok: false; error: string };
 
+export type CreateTransparentPixInput = {
+  amountCents: number;
+  description: string;
+  expiresIn?: number;
+};
+
+export type CreateTransparentPixResult =
+  | { ok: true; pixId: string; brCode: string; brCodeBase64: string; expiresAt: string }
+  | { ok: false; error: string };
+
 export type AbacatePayClient = ReturnType<typeof createAbacatePayClient>;
 
 export function createAbacatePayClient(
@@ -54,7 +64,7 @@ export function createAbacatePayClient(
 
     const json = await response.json() as { data?: { id: string } | null; error?: string | null };
 
-    console.log("[abacate-pay] customer response", response.status, JSON.stringify(json));
+    console.log("[abacate-pay] customer response", response.status, json.error ?? "ok");
 
     if (!response.ok || json.error || !json.data) {
       return { ok: false, error: json.error ?? `HTTP ${response.status}` };
@@ -119,7 +129,7 @@ export function createAbacatePayClient(
 
     const json = await response.json() as { data?: { id: string; url: string; amount: number } | null; error?: string | null };
 
-    console.log("[abacate-pay] checkout response", response.status, JSON.stringify(json));
+    console.log("[abacate-pay] checkout response", response.status, json.error ?? "ok");
 
     if (!response.ok || json.error || !json.data) {
       return { ok: false, error: json.error ?? `HTTP ${response.status}` };
@@ -133,5 +143,39 @@ export function createAbacatePayClient(
     };
   }
 
-  return { createCustomer, createBilling };
+  async function createTransparentPix(input: CreateTransparentPixInput): Promise<CreateTransparentPixResult> {
+    const response = await fetch(`${env.ABACATE_PAY_API_URL}/v2/transparents/create`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        method: "PIX",
+        data: {
+          amount: input.amountCents,
+          description: input.description,
+          expiresIn: input.expiresIn ?? 3600
+        }
+      })
+    });
+
+    const json = await response.json() as {
+      data?: { id: string; brCode: string; brCodeBase64: string; expiresAt: string } | null;
+      error?: string | null;
+    };
+
+    console.log("[abacate-pay] transparent pix response", response.status, json.error ?? "ok");
+
+    if (!response.ok || json.error || !json.data) {
+      return { ok: false, error: json.error ?? `HTTP ${response.status}` };
+    }
+
+    return {
+      ok: true,
+      pixId: json.data.id,
+      brCode: json.data.brCode,
+      brCodeBase64: json.data.brCodeBase64,
+      expiresAt: json.data.expiresAt
+    };
+  }
+
+  return { createCustomer, createBilling, createTransparentPix };
 }

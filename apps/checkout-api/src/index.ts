@@ -1,20 +1,24 @@
 import { createPostgresClient, pingPostgres } from "@santos-games/postgres";
+import { createRedisClient, pingRedis } from "@santos-games/redis";
 
 import { parseCheckoutApiEnv } from "./config/env";
 import { runMigrations } from "./migrations";
 import { createAbacatePayClient } from "./modules/checkout/abacate-pay-client";
 import { createCustomerRepository } from "./modules/checkout/customer-repository";
 import { createOrderRepository } from "./modules/checkout/order-repository";
+import { createPixStore } from "./modules/checkout/pix-store";
 import { createProductRepository } from "./modules/checkout/product-repository";
 import { createCheckoutApiServer } from "./server";
 
 const env = parseCheckoutApiEnv();
 const postgresLegacy = createPostgresClient({ DATABASE_URL: env.DATABASE_URL });
 const postgresHome = createPostgresClient({ DATABASE_URL: env.DATABASE_HOME });
+const redis = createRedisClient({ REDIS_URL: env.REDIS_URL });
 const orders = createOrderRepository(postgresHome);
 const customers = createCustomerRepository(postgresHome);
 const products = createProductRepository(postgresHome);
 const abacatePay = createAbacatePayClient(env);
+const pixStore = createPixStore(redis);
 
 await runMigrations(postgresHome);
 
@@ -24,9 +28,11 @@ const server = createCheckoutApiServer({
   customers,
   products,
   abacatePay,
+  pixStore,
   dependencies: {
     postgresLegacy: () => pingPostgres(postgresLegacy),
-    postgresHome: () => pingPostgres(postgresHome)
+    postgresHome: () => pingPostgres(postgresHome),
+    redis: () => pingRedis(redis)
   }
 });
 
@@ -34,6 +40,7 @@ const close = async () => {
   await server.close();
   await postgresLegacy.end({ timeout: 5 });
   await postgresHome.end({ timeout: 5 });
+  redis.disconnect();
 };
 
 process.on("SIGINT", () => {

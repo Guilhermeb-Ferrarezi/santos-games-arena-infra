@@ -59,20 +59,38 @@ export function registerWebhookRoutes(
       }
     }
 
-    const event = json as { event?: string; data?: { checkout?: { id?: string; status?: string } } };
+    const event = json as {
+      event?: string;
+      data?: {
+        checkout?: { id?: string; status?: string };
+        pix?: { id?: string; status?: string };
+        transparent?: { id?: string; status?: string };
+        id?: string;
+        status?: string;
+      };
+    };
 
-    console.log("[webhook] received event", event?.event, event?.data?.checkout?.id, event?.data?.checkout?.status);
+    const eventName = event?.event ?? "";
+    const billingId =
+      event?.data?.checkout?.id ??
+      event?.data?.pix?.id ??
+      event?.data?.transparent?.id ??
+      event?.data?.id;
+    const rawStatus =
+      event?.data?.checkout?.status ??
+      event?.data?.pix?.status ??
+      event?.data?.transparent?.status ??
+      event?.data?.status;
 
-    const checkoutId = event?.data?.checkout?.id;
-    const checkoutStatus = event?.data?.checkout?.status;
+    console.log("[webhook] received event", eventName, billingId, rawStatus);
 
-    if (checkoutId && checkoutStatus) {
-      if (checkoutStatus === "PAID") {
-        await orders.updateStatus(checkoutId, "paid");
-      } else if (checkoutStatus === "EXPIRED") {
-        await orders.updateStatus(checkoutId, "expired");
-      } else if (checkoutStatus === "FAILED") {
-        await orders.updateStatus(checkoutId, "failed");
+    if (billingId && rawStatus) {
+      if (rawStatus === "PAID" || eventName === "transparent.completed") {
+        await orders.updateStatus(billingId, "paid");
+      } else if (rawStatus === "EXPIRED") {
+        await orders.updateStatus(billingId, "expired");
+      } else if (rawStatus === "FAILED" || rawStatus === "CANCELLED") {
+        await orders.updateStatus(billingId, "failed");
       }
     }
 

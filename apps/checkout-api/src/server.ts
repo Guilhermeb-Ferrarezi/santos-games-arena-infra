@@ -9,6 +9,7 @@ import type { AbacatePayClient } from "./modules/checkout/abacate-pay-client";
 import type { CustomerRepository } from "./modules/checkout/customer-repository";
 import { registerCheckoutRoutes } from "./modules/checkout/routes";
 import type { OrderRepository } from "./modules/checkout/order-repository";
+import type { PixStore } from "./modules/checkout/pix-store";
 import type { ProductRepository } from "./modules/checkout/product-repository";
 import { registerWebhookRoutes } from "./modules/webhook/routes";
 
@@ -22,10 +23,11 @@ export type CheckoutApiServerOptions = {
   customers?: CustomerRepository;
   products?: ProductRepository;
   abacatePay?: AbacatePayClient;
+  pixStore?: PixStore;
 };
 
 export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) {
-  const { env, dependencies, orders, customers, products, abacatePay } = options;
+  const { env, dependencies, orders, customers, products, abacatePay, pixStore } = options;
 
   const server = Fastify({
     logger: env?.NODE_ENV === "production"
@@ -73,7 +75,7 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
     });
   }
 
-  if (orders && customers && products && abacatePay && env?.JWT_SECRET && env.AUTH_COOKIE_NAME) {
+  if (orders && customers && products && abacatePay && pixStore && env?.JWT_SECRET && env.AUTH_COOKIE_NAME) {
     server.register(
       async (checkoutServer) => {
         registerCheckoutRoutes(
@@ -86,7 +88,8 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
           orders,
           customers,
           products,
-          abacatePay
+          abacatePay,
+          pixStore
         );
       },
       { prefix: CHECKOUT_PREFIX }

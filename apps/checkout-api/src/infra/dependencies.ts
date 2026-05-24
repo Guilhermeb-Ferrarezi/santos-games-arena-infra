@@ -1,4 +1,4 @@
-export type DependencyName = "postgresLegacy" | "postgresHome";
+export type DependencyName = "postgresLegacy" | "postgresHome" | "redis";
 export type DependencyState = "up" | "down";
 
 export type DependencyPingers = Record<DependencyName, () => Promise<boolean>>;

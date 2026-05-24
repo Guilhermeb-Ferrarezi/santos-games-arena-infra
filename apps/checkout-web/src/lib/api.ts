@@ -18,15 +18,19 @@ export type Order = {
   description: string;
   amountCents: number;
   status: "pending" | "paid" | "expired" | "failed";
-  checkoutUrl: string | null;
+  pixCode: string | null;
+  pixCodeBase64: string | null;
+  pixExpiresAt: string | null;
   createdAt: string;
 };
 
 export type CreateOrderResult = {
   orderId: number;
-  checkoutUrl: string;
   amountCents: number;
   status: string;
+  pixCode: string;
+  pixCodeBase64: string;
+  pixExpiresAt: string;
 };
 
 const authApi = axios.create({ baseURL: "/api/auth", withCredentials: true });

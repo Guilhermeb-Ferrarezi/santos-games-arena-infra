@@ -1,6 +1,22 @@
 import type { AuthApiEnv } from "../../../config/env";
 
 const encoder = new TextEncoder();
+const keyCache = new Map<string, Promise<CryptoKey>>();
+
+function getHmacKey(secret: string): Promise<CryptoKey> {
+  let promise = keyCache.get(secret);
+  if (!promise) {
+    promise = crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    keyCache.set(secret, promise);
+  }
+  return promise;
+}
 
 export async function verifyPassword(
   password: string,
@@ -34,16 +50,7 @@ export async function createLegacyPasswordHash(
   password: string,
   secret: string
 ): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    {
-      name: "HMAC",
-      hash: "SHA-256"
-    },
-    false,
-    ["sign"]
-  );
+  const key = await getHmacKey(secret);
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(password));
 
   return `sha256:${Buffer.from(signature).toString("hex")}`;

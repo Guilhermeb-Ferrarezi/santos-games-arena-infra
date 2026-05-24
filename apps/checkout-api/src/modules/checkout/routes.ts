@@ -5,6 +5,7 @@ import type { CheckoutApiEnv } from "../../config/env";
 import type { AbacatePayClient } from "./abacate-pay-client";
 import type { CustomerRepository } from "./customer-repository";
 import type { OrderRepository } from "./order-repository";
+import type { PixStore } from "./pix-store";
 import type { ProductRepository } from "./product-repository";
 
 const createOrderBodySchema = z.object({
@@ -17,7 +18,8 @@ export function registerCheckoutRoutes(
   orders: OrderRepository,
   customers: CustomerRepository,
   products: ProductRepository,
-  abacatePay: AbacatePayClient
+  abacatePay: AbacatePayClient,
+  pixStore: PixStore
 ) {
   server.get("/products", async () => {
     const list = await products.listActive();
@@ -45,22 +47,6 @@ export function registerCheckoutRoutes(
       return reply.code(404).send({ error: "product_not_found" });
     }
 
-    let customerId = await customers.findByUserId(session.userId);
-
-    if (!customerId) {
-      const result = await abacatePay.createCustomer({
-        name: session.login,
-        email: session.email
-      });
-
-      if (!result.ok) {
-        return reply.code(502).send({ error: "customer_failed", message: result.error });
-      }
-
-      customerId = result.customerId;
-      await customers.save(session.userId, customerId, session.login, session.email);
-    }
-
     const order = await orders.create({
       userId: session.userId,
       productId: String(product.id),
@@ -68,38 +54,29 @@ export function registerCheckoutRoutes(
       amountCents: product.amountCents
     });
 
-    const completionUrl = env.CHECKOUT_WEB_URL
-      ? `${env.CHECKOUT_WEB_URL}/order/${order.id}`
-      : undefined;
-
-    const returnUrl = env.CHECKOUT_WEB_URL ?? undefined;
-
-    const billing = await abacatePay.createBilling({
-      customerId,
-      products: [
-        {
-          externalId: String(product.id),
-          name: product.name,
-          description: product.description,
-          quantity: 1,
-          price: product.amountCents
-        }
-      ],
-      completionUrl,
-      returnUrl
+    const pix = await abacatePay.createTransparentPix({
+      amountCents: product.amountCents,
+      description: product.name
     });
 
-    if (!billing.ok) {
-      return reply.code(502).send({ error: "billing_failed", message: billing.error });
+    if (!pix.ok) {
+      return reply.code(502).send({ error: "pix_failed", message: pix.error });
     }
 
-    await orders.updateBilling(order.id, billing.billingId, billing.checkoutUrl);
+    await orders.updateBilling(order.id, pix.pixId, null);
+    await pixStore.save(order.id, {
+      brCode: pix.brCode,
+      brCodeBase64: pix.brCodeBase64,
+      expiresAt: pix.expiresAt
+    });
 
     return reply.code(201).send({
       orderId: order.id,
-      checkoutUrl: billing.checkoutUrl,
-      amountCents: billing.amountCents,
-      status: "pending"
+      amountCents: product.amountCents,
+      status: "pending",
+      pixCode: pix.brCode,
+      pixCodeBase64: pix.brCodeBase64,
+      pixExpiresAt: pix.expiresAt
     });
   });
 
@@ -125,13 +102,17 @@ export function registerCheckoutRoutes(
       return reply.code(404).send({ error: "not_found" });
     }
 
+    const pixData = order.status === "pending" ? await pixStore.get(orderId) : null;
+
     return {
       id: order.id,
       productId: order.productId,
       description: order.description,
       amountCents: order.amountCents,
       status: order.status,
-      checkoutUrl: order.checkoutUrl,
+      pixCode: pixData?.brCode ?? null,
+      pixCodeBase64: pixData?.brCodeBase64 ?? null,
+      pixExpiresAt: pixData?.expiresAt ?? null,
       createdAt: order.createdAt
     };
   });

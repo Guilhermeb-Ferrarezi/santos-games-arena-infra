@@ -61,7 +61,7 @@ export function createOrderRepository(client: PostgresClient) {
     return toOrder(row);
   }
 
-  async function updateBilling(id: number, billingId: string, checkoutUrl: string): Promise<void> {
+  async function updateBilling(id: number, billingId: string, checkoutUrl: string | null): Promise<void> {
     await client`
       update checkout_orders
       set abacate_billing_id = ${billingId},

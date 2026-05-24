@@ -14,6 +14,7 @@ const checkoutApiEnvSchema = z.object({
   ABACATE_PAY_API_KEY: nonEmptyString("ABACATE_PAY_API_KEY"),
   ABACATE_PAY_WEBHOOK_SECRET: nonEmptyString("ABACATE_PAY_WEBHOOK_SECRET"),
   ABACATE_PAY_API_URL: z.string().trim().url().default("https://api.abacatepay.com"),
+  REDIS_URL: urlString("REDIS_URL"),
   LOGS_MONGO_URL: z.string().trim().url().optional(),
   LOGS_MONGO_DB_NAME: z.string().trim().min(1).default("logs"),
   LOGS_HTTP_COLLECTION: z.string().trim().min(1).default("sga_checkout_api_logs"),

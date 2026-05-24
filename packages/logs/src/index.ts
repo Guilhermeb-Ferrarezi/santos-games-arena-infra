@@ -236,6 +236,9 @@ export function createMongoDocumentWriter<TDocument extends Document>(
   async function getCollection() {
     if (!connectPromise) {
       connectPromise = client.connect().then(() => undefined);
+      connectPromise.catch(() => {
+        connectPromise = null;
+      });
     }
 
     await connectPromise;
