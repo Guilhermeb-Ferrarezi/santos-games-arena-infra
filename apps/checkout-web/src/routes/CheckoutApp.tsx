@@ -440,7 +440,7 @@ function PaymentPage({
       <SgHeader userLogin={session.user?.login} onBack={onCancel} />
 
       <main className="flex flex-1 justify-center px-4 py-8">
-        <div className="flex w-full max-w-4xl items-start gap-10">
+        <div className="flex w-full max-w-4xl flex-col gap-8 md:flex-row md:items-start md:gap-10">
 
           {/* ── Coluna esquerda: form ── */}
           <div className="w-full min-w-0 max-w-sm">
@@ -564,7 +564,7 @@ function PaymentPage({
           </div>
 
           {/* ── Coluna direita: card de resumo ── */}
-          <div className="hidden flex-1 md:block">
+          <div className="flex-1 md:block">
             <div className="border border-border/60 bg-surface-1 p-6 flex flex-col gap-5">
               {/* Nome do produto */}
               <h2 className="text-3xl font-display font-bold leading-tight">{product.name}</h2>
