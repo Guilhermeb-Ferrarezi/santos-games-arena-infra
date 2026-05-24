@@ -46,6 +46,18 @@ export type CreateTransparentPixResult =
   | { ok: true; pixId: string; brCode: string; brCodeBase64: string; expiresAt: string }
   | { ok: false; error: string };
 
+export type CreateTransparentCardInput = {
+  amountCents: number;
+  description: string;
+  installments?: number;
+  card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string };
+  customer: { name: string; email: string; taxId: string; cellphone: string };
+};
+
+export type CreateTransparentCardResult =
+  | { ok: true; cardId: string; status: "PAID" | "PENDING" | "FAILED" }
+  | { ok: false; error: string };
+
 export type AbacatePayClient = ReturnType<typeof createAbacatePayClient>;
 
 export function createAbacatePayClient(
@@ -184,5 +196,35 @@ export function createAbacatePayClient(
     };
   }
 
-  return { createCustomer, createBilling, createTransparentPix };
+  async function createTransparentCard(input: CreateTransparentCardInput): Promise<CreateTransparentCardResult> {
+    const response = await fetch(`${env.ABACATE_PAY_API_URL}/v2/transparents/create`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        method: "CREDIT_CARD",
+        data: {
+          amount: input.amountCents,
+          description: input.description,
+          installments: input.installments ?? 1,
+          card: input.card,
+          customer: input.customer
+        }
+      })
+    });
+
+    const json = await response.json() as {
+      data?: { id: string; status: "PAID" | "PENDING" | "FAILED" } | null;
+      error?: string | null;
+    };
+
+    console.log("[abacate-pay] transparent card response", response.status, json.error ?? "ok");
+
+    if (!response.ok || json.error || !json.data) {
+      return { ok: false, error: json.error ?? `HTTP ${response.status}` };
+    }
+
+    return { ok: true, cardId: json.data.id, status: json.data.status };
+  }
+
+  return { createCustomer, createBilling, createTransparentPix, createTransparentCard };
 }

@@ -11,11 +11,20 @@ import type { ProductRepository } from "./product-repository";
 
 const createOrderBodySchema = z.object({
   productId: z.number().int().positive(),
+  method: z.enum(["pix", "card"]).default("pix"),
   customer: z.object({
     name: z.string().trim().min(2).max(100),
     email: z.string().email(),
     taxId: z.string().trim().min(11).max(14),
     cellphone: z.string().trim().min(10)
+  }).optional(),
+  card: z.object({
+    number: z.string().trim().min(13).max(19),
+    holderName: z.string().trim().min(2).max(100),
+    expiryMonth: z.string().length(2),
+    expiryYear: z.string().length(4),
+    cvv: z.string().min(3).max(4),
+    installments: z.number().int().min(1).max(12).default(1)
   }).optional()
 });
 
@@ -102,7 +111,8 @@ export function registerCheckoutRoutes(
       userId: session.userId,
       productId: String(product.id),
       description: product.name,
-      amountCents: product.amountCents
+      amountCents: product.amountCents,
+      paymentMethod: parsed.data.method
     });
 
     const customer = parsed.data.customer
@@ -113,6 +123,55 @@ export function registerCheckoutRoutes(
           cellphone: parsed.data.customer.cellphone
         }
       : undefined;
+
+    if (parsed.data.method === "card") {
+      if (!customer) {
+        return reply.code(400).send({ error: "customer_required" });
+      }
+
+      const cardInput = parsed.data.card!;
+      const cardResult = await abacatePay.createTransparentCard({
+        amountCents: product.amountCents,
+        description: product.name,
+        installments: cardInput.installments,
+        card: {
+          number: cardInput.number.replace(/\s/g, ""),
+          holderName: cardInput.holderName,
+          expiryMonth: cardInput.expiryMonth,
+          expiryYear: cardInput.expiryYear,
+          cvv: cardInput.cvv
+        },
+        customer
+      });
+
+      if (!cardResult.ok) {
+        await orders.failById(order.id);
+        return reply.code(502).send({ error: "card_error", message: cardResult.error });
+      }
+
+      await orders.updateBilling(order.id, cardResult.cardId, null);
+
+      if (cardResult.status === "PAID") {
+        await orders.updateStatus(cardResult.cardId, "paid");
+      } else if (cardResult.status === "FAILED") {
+        await orders.updateStatus(cardResult.cardId, "failed");
+        return reply.code(402).send({ error: "card_declined" });
+      }
+
+      if (customer) {
+        await customers.saveInfo(session.userId, {
+          name: customer.name,
+          taxId: customer.taxId,
+          cellphone: customer.cellphone
+        });
+      }
+
+      return reply.code(201).send({
+        orderId: order.id,
+        amountCents: product.amountCents,
+        status: cardResult.status === "PAID" ? "paid" : "pending"
+      });
+    }
 
     const pix = await abacatePay.createTransparentPix({
       amountCents: product.amountCents,

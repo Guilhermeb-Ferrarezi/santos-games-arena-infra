@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   cancelOrder,
+  createCardOrder,
   createOrder,
   createPayIntent,
   getCustomerInfo,
@@ -384,6 +385,37 @@ function OrderModal({
 const inputCls =
   "w-full bg-surface-2 border border-border/60 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/60 transition-colors";
 
+function formatCardNumber(v: string): string {
+  return v.replace(/\D/g, "").slice(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+function formatExpiry(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 4);
+  return d.length >= 3 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+}
+
+function detectBrand(n: string): "visa" | "mastercard" | "elo" | "amex" | "unknown" {
+  const d = n.replace(/\s/g, "");
+  if (/^4/.test(d)) return "visa";
+  if (/^5[1-5]|^2[2-7]/.test(d)) return "mastercard";
+  if (/^6(36368|36297|504175|362|363)/.test(d)) return "elo";
+  if (/^3[47]/.test(d)) return "amex";
+  return "unknown";
+}
+
+function luhn(num: string): boolean {
+  const d = num.replace(/\s/g, "");
+  let sum = 0;
+  let odd = false;
+  for (let i = d.length - 1; i >= 0; i--) {
+    let n = parseInt(d[i]);
+    if (odd) { n *= 2; if (n > 9) n -= 9; }
+    sum += n;
+    odd = !odd;
+  }
+  return sum % 10 === 0;
+}
+
 function PaymentPage({
   product,
   session,
@@ -397,10 +429,15 @@ function PaymentPage({
   session: Session;
   savedCustomer?: CustomerInfo | null;
   onCancel: () => void;
-  onSubmit: (data: { name: string; email: string; taxId: string; cellphone: string }) => void;
+  onSubmit: (data: {
+    name: string; email: string; taxId: string; cellphone: string;
+    method: "pix" | "card";
+    card?: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string };
+  }) => void;
   isPending: boolean;
   mutationError?: string;
 }) {
+  const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
   const [name, setName] = useState(savedCustomer?.name ?? "");
   const [email, setEmail] = useState(session.user?.email ?? "");
   const [taxId, setTaxId] = useState(
@@ -413,8 +450,11 @@ function PaymentPage({
       ? savedCustomer.cellphone.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3")
       : ""
   );
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
 
-  type FieldErrors = { name?: string; email?: string; taxId?: string; cellphone?: string };
+  type FieldErrors = { name?: string; email?: string; taxId?: string; cellphone?: string; cardNumber?: string; cardExpiry?: string; cardCvv?: string };
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitted, setSubmitted] = useState(false);
 
@@ -441,28 +481,40 @@ function PaymentPage({
     return calc(9) === parseInt(d[9]) && calc(10) === parseInt(d[10]);
   }
 
-  function validate(vals: { name: string; email: string; taxId: string; cellphone: string }) {
+  function validate(vals: { name: string; email: string; taxId: string; cellphone: string; cardNumber: string; cardExpiry: string; cardCvv: string }, method: "pix" | "card") {
     const e: FieldErrors = {};
     if (vals.name.trim().length < 3) e.name = "Informe seu nome completo.";
     if (!/\S+@\S+\.\S+/.test(vals.email.trim())) e.email = "E-mail inválido.";
     if (!validateCpf(vals.taxId)) e.taxId = "CPF inválido.";
     if (vals.cellphone.replace(/\D/g, "").length < 10) e.cellphone = "Telefone inválido.";
+    if (method === "card") {
+      const digits = vals.cardNumber?.replace(/\s/g, "") ?? "";
+      if (digits.length < 13 || !luhn(digits)) e.cardNumber = "Número de cartão inválido.";
+      const [mm, yy] = (vals.cardExpiry ?? "").split("/");
+      const now = new Date();
+      const expMonth = parseInt(mm), expYear = 2000 + parseInt(yy ?? "0");
+      if (!mm || !yy || isNaN(expMonth) || expMonth < 1 || expMonth > 12 ||
+          expYear < now.getFullYear() || (expYear === now.getFullYear() && expMonth < now.getMonth() + 1)) {
+        e.cardExpiry = "Validade inválida.";
+      }
+      if (!vals.cardCvv || vals.cardCvv.replace(/\D/g, "").length < 3) e.cardCvv = "CVV inválido.";
+    }
     return e;
   }
 
   function updateField(field: keyof FieldErrors, setter: (v: string) => void, newValue: string) {
     setter(newValue);
     if (submitted) {
-      const vals = { name, email, taxId, cellphone, [field]: newValue };
-      const e = validate(vals);
+      const vals = { name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, [field]: newValue };
+      const e = validate(vals, paymentMethod);
       setErrors((prev) => ({ ...prev, [field]: e[field] }));
     }
   }
 
   function handleBlur(field: keyof FieldErrors, currentValue: string) {
     if (!submitted) {
-      const vals = { name, email, taxId, cellphone, [field]: currentValue };
-      const e = validate(vals);
+      const vals = { name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, [field]: currentValue };
+      const e = validate(vals, paymentMethod);
       if (e[field]) setErrors((prev) => ({ ...prev, [field]: e[field] }));
     }
   }
@@ -470,17 +522,38 @@ function PaymentPage({
   function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     setSubmitted(true);
-    const vals = { name, email, taxId, cellphone };
-    const e = validate(vals);
+    const vals = { name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv };
+    const e = validate(vals, paymentMethod);
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    onSubmit({
-      name: vals.name.trim(),
-      email: vals.email.trim(),
-      taxId: vals.taxId.replace(/\D/g, ""),
-      cellphone: vals.cellphone.replace(/\D/g, "")
-    });
+    if (paymentMethod === "card") {
+      const [mm, yy] = cardExpiry.split("/");
+      onSubmit({
+        name: vals.name.trim(),
+        email: vals.email.trim(),
+        taxId: vals.taxId.replace(/\D/g, ""),
+        cellphone: vals.cellphone.replace(/\D/g, ""),
+        method: "card",
+        card: {
+          number: cardNumber.replace(/\s/g, ""),
+          holderName: vals.name.trim(),
+          expiryMonth: mm,
+          expiryYear: `20${yy}`,
+          cvv: cardCvv
+        }
+      });
+    } else {
+      onSubmit({
+        name: vals.name.trim(),
+        email: vals.email.trim(),
+        taxId: vals.taxId.replace(/\D/g, ""),
+        cellphone: vals.cellphone.replace(/\D/g, ""),
+        method: "pix"
+      });
+    }
   }
+
+  void detectBrand;
 
   const features = product.features?.length > 0
     ? product.features
@@ -517,17 +590,20 @@ function PaymentPage({
             <div className="mb-4 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled
-                className="flex items-center justify-center gap-2 border border-border/30 bg-surface-1 px-3 py-3 text-sm text-muted-foreground/40 cursor-not-allowed select-none"
+                onClick={() => setPaymentMethod("card")}
+                className={`flex items-center justify-center gap-2 border px-3 py-3 text-sm font-semibold transition-colors ${paymentMethod === "card" ? "border-primary/60 bg-primary/10 text-primary" : "border-border/60 bg-surface-1 text-muted-foreground hover:text-foreground"}`}
               >
                 <CreditCardIcon />
                 <span>Cartão</span>
-                <span className="border border-border/30 px-1 text-[9px] uppercase tracking-wide">Em breve</span>
               </button>
-              <div className="flex items-center justify-center gap-2 border border-[#32BCAD]/60 bg-[#32BCAD]/10 px-3 py-3 text-sm font-semibold text-[#32BCAD]">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("pix")}
+                className={`flex items-center justify-center gap-2 border px-3 py-3 text-sm font-semibold transition-colors ${paymentMethod === "pix" ? "border-[#32BCAD]/60 bg-[#32BCAD]/10 text-[#32BCAD]" : "border-border/60 bg-surface-1 text-muted-foreground hover:text-foreground"}`}
+              >
                 <PixIcon />
                 <span>PIX</span>
-              </div>
+              </button>
             </div>
 
             {/* Form */}
@@ -584,6 +660,51 @@ function PaymentPage({
                 />
               </FormField>
 
+              {paymentMethod === "card" && (
+                <>
+                  <FormField label="Número do cartão" error={errors.cardNumber}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0000 0000 0000 0000"
+                      value={cardNumber}
+                      className={inputCls}
+                      onChange={(e) => updateField("cardNumber", setCardNumber, formatCardNumber(e.target.value))}
+                      onBlur={(e) => handleBlur("cardNumber", e.target.value)}
+                      disabled={isPending}
+                    />
+                  </FormField>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField label="Validade" error={errors.cardExpiry}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="MM/AA"
+                        value={cardExpiry}
+                        className={inputCls}
+                        onChange={(e) => updateField("cardExpiry", setCardExpiry, formatExpiry(e.target.value))}
+                        onBlur={(e) => handleBlur("cardExpiry", e.target.value)}
+                        disabled={isPending}
+                      />
+                    </FormField>
+                    <FormField label="CVV" error={errors.cardCvv}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="CVV"
+                        value={cardCvv}
+                        maxLength={4}
+                        className={inputCls}
+                        onChange={(e) => updateField("cardCvv", setCardCvv, e.target.value.replace(/\D/g, "").slice(0, 4))}
+                        onBlur={(e) => handleBlur("cardCvv", e.target.value)}
+                        disabled={isPending}
+                      />
+                    </FormField>
+                  </div>
+                </>
+              )}
+
               {mutationError && (
                 <p className="text-xs text-destructive border border-destructive/30 bg-destructive/10 px-3 py-2">
                   {mutationError}
@@ -594,8 +715,13 @@ function PaymentPage({
                 {isPending ? (
                   <>
                     <Spinner />
-                    <span>Gerando PIX…</span>
+                    <span>{paymentMethod === "card" ? "Processando…" : "Gerando PIX…"}</span>
                   </>
+                ) : paymentMethod === "card" ? (
+                  <span className="flex items-center gap-2">
+                    <CreditCardIcon size={16} />
+                    Pagar com Cartão
+                  </span>
                 ) : (
                   <span className="flex items-center gap-2">
                     <PixIcon size={16} />
@@ -863,6 +989,26 @@ export function CheckoutApp() {
     }
   });
 
+  const cardMutation = useMutation({
+    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string } }) =>
+      createCardOrder(vars.productId, vars.customer, vars.card).then((r) => ({ ...r, product: vars.product })),
+    onSuccess: (result) => {
+      queryClient.setQueryData(["order", result.orderId], {
+        id: result.orderId,
+        productId: "",
+        description: "",
+        amountCents: result.amountCents,
+        status: result.status,
+        pixCode: null,
+        pixCodeBase64: null,
+        pixExpiresAt: null,
+        createdAt: new Date().toISOString()
+      });
+      window.history.pushState({ product: result.product }, "", `/order/${result.orderId}`);
+      setAppState({ page: "order", orderId: result.orderId, product: result.product });
+    }
+  });
+
   if (isLoading) return <LoadingScreen />;
 
   if (!session?.authenticated || !session.user) {
@@ -880,11 +1026,31 @@ export function CheckoutApp() {
         product={appState.product}
         session={session}
         savedCustomer={savedCustomer}
-        isPending={buyMutation.isPending}
-        mutationError={buyMutation.error ? "Erro ao gerar PIX. Tente novamente." : undefined}
+        isPending={buyMutation.isPending || cardMutation.isPending}
+        mutationError={
+          buyMutation.error ? "Erro ao gerar PIX. Tente novamente." :
+          cardMutation.error ? (
+            (cardMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error === "card_declined"
+              ? "Cartão recusado. Verifique os dados ou use outro cartão."
+              : "Erro ao processar cartão. Tente novamente."
+          ) : undefined
+        }
         onCancel={() => navigate("/")}
-        onSubmit={(customer) => {
-          buyMutation.mutate({ productId: appState.product.id, product: appState.product, customer });
+        onSubmit={(data) => {
+          if (data.method === "card" && data.card) {
+            cardMutation.mutate({
+              productId: appState.product.id,
+              product: appState.product,
+              customer: { name: data.name, email: data.email, taxId: data.taxId, cellphone: data.cellphone },
+              card: data.card
+            });
+          } else {
+            buyMutation.mutate({
+              productId: appState.product.id,
+              product: appState.product,
+              customer: { name: data.name, email: data.email, taxId: data.taxId, cellphone: data.cellphone }
+            });
+          }
         }}
       />
     );
@@ -912,6 +1078,7 @@ export function CheckoutApp() {
             } else {
               // cancelado: volta para PaymentPage do mesmo produto
               buyMutation.reset();
+              cardMutation.reset();
               window.history.pushState({}, "", "/");
               setAppState({ page: "payment", product: appState.product });
             }

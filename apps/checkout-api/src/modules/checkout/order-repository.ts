@@ -11,6 +11,7 @@ export type Order = {
   status: OrderStatus;
   abacateBillingId: string | null;
   checkoutUrl: string | null;
+  paymentMethod: "pix" | "card";
   createdAt: string;
   updatedAt: string;
 };
@@ -24,6 +25,7 @@ type OrderRow = {
   status: OrderStatus;
   abacate_billing_id: string | null;
   checkout_url: string | null;
+  payment_method: "pix" | "card";
   created_at: string;
   updated_at: string;
 };
@@ -38,6 +40,7 @@ function toOrder(row: OrderRow): Order {
     status: row.status,
     abacateBillingId: row.abacate_billing_id,
     checkoutUrl: row.checkout_url,
+    paymentMethod: row.payment_method ?? "pix",
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -51,10 +54,12 @@ export function createOrderRepository(client: PostgresClient) {
     productId: string;
     description: string;
     amountCents: number;
+    paymentMethod?: "pix" | "card";
   }): Promise<Order> {
+    const method = input.paymentMethod ?? "pix";
     const [row] = await client<OrderRow[]>`
-      insert into checkout_orders (user_id, product_id, description, amount_cents, status)
-      values (${input.userId}, ${input.productId}, ${input.description}, ${input.amountCents}, 'pending')
+      insert into checkout_orders (user_id, product_id, description, amount_cents, status, payment_method)
+      values (${input.userId}, ${input.productId}, ${input.description}, ${input.amountCents}, 'pending', ${method})
       returning *
     `;
 
@@ -110,5 +115,13 @@ export function createOrderRepository(client: PostgresClient) {
     return !!row;
   }
 
-  return { create, updateBilling, updateStatus, findById, findByBillingId, cancelById };
+  async function failById(orderId: number): Promise<void> {
+    await client`
+      update checkout_orders
+      set status = 'failed', updated_at = now()
+      where id = ${orderId}
+    `;
+  }
+
+  return { create, updateBilling, updateStatus, findById, findByBillingId, cancelById, failById };
 }

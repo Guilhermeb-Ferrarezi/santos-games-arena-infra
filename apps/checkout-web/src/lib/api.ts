@@ -28,10 +28,16 @@ export type Order = {
 export type CreateOrderResult = {
   orderId: number;
   amountCents: number;
-  status: string;
-  pixCode: string;
-  pixCodeBase64: string;
-  pixExpiresAt: string;
+  status: "pending" | "paid" | "failed";
+  pixCode: string | null;
+  pixCodeBase64: string | null;
+  pixExpiresAt: string | null;
+};
+
+export type CreateCardOrderResult = {
+  orderId: number;
+  amountCents: number;
+  status: "pending" | "paid";
 };
 
 const authApi = axios.create({ baseURL: "/api/auth", withCredentials: true });
@@ -52,6 +58,20 @@ export async function createOrder(
   customer?: { name: string; email: string; taxId: string; cellphone: string }
 ): Promise<CreateOrderResult> {
   const { data } = await checkoutApi.post<CreateOrderResult>("/order", { productId, customer });
+  return data;
+}
+
+export async function createCardOrder(
+  productId: number,
+  customer: { name: string; email: string; taxId: string; cellphone: string },
+  card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string; installments?: number }
+): Promise<CreateCardOrderResult> {
+  const { data } = await checkoutApi.post<CreateCardOrderResult>("/order", {
+    productId,
+    method: "card",
+    customer,
+    card
+  });
   return data;
 }
 

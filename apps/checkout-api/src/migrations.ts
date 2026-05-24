@@ -14,4 +14,9 @@ export async function runMigrations(client: PostgresClient): Promise<void> {
     ADD COLUMN IF NOT EXISTS cellphone TEXT
   `;
 
+  await client`
+    ALTER TABLE checkout_orders
+    ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'pix'
+  `;
+
 }
