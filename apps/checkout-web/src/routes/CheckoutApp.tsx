@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import {
   cancelOrder,
   createOrder,
+  createPayIntent,
   getOrder,
+  getPayIntent,
   getSession,
   listProducts,
   type CreateOrderResult,
@@ -395,7 +397,7 @@ function PaymentPage({
   isPending: boolean;
   mutationError?: string;
 }) {
-  const [name, setName] = useState(session.user?.login ?? "");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState(session.user?.email ?? "");
   const [taxId, setTaxId] = useState("");
   const [cellphone, setCellphone] = useState("");
@@ -646,6 +648,36 @@ function PaymentPage({
   );
 }
 
+// ── Intent loader ─────────────────────────────────────────────────────────────
+
+function IntentLoader({
+  token,
+  session,
+  onLoaded,
+  onError
+}: {
+  token: string;
+  session: Session;
+  onLoaded: (product: Product) => void;
+  onError: () => void;
+}) {
+  const { data: product, error } = useQuery({
+    queryKey: ["pay-intent", token],
+    queryFn: () => getPayIntent(token),
+    retry: false
+  });
+
+  useEffect(() => {
+    if (product) onLoaded(product);
+  }, [product]);
+
+  useEffect(() => {
+    if (error) onError();
+  }, [error]);
+
+  return <LoadingScreen />;
+}
+
 // ── Products page ─────────────────────────────────────────────────────────────
 
 function ProductCard({ product, onBuy }: { product: Product; onBuy: () => void }) {
@@ -715,6 +747,7 @@ function ProductsPage({
 
 type AppState =
   | { page: "products" }
+  | { page: "intent"; token: string }
   | { page: "payment"; product: Product }
   | { page: "order"; orderId: number; initialPix?: CreateOrderResult };
 
@@ -724,11 +757,14 @@ export function CheckoutApp() {
 
   useEffect(() => {
     function handlePath() {
-      const match = window.location.pathname.match(/^\/order\/(\d+)$/);
-      if (match) {
-        const orderId = parseInt(match[1], 10);
+      const orderMatch = window.location.pathname.match(/^\/order\/(\d+)$/);
+      const intentMatch = window.location.pathname.match(/^\/pay\/([a-f0-9]+)$/);
+      if (orderMatch) {
+        const orderId = parseInt(orderMatch[1], 10);
         const state = window.history.state as { pix?: CreateOrderResult } | null;
         setAppState({ page: "order", orderId, initialPix: state?.pix });
+      } else if (intentMatch) {
+        setAppState({ page: "intent", token: intentMatch[1] });
       } else {
         setAppState({ page: "products" });
       }
@@ -742,6 +778,11 @@ export function CheckoutApp() {
     queryKey: ["session"],
     queryFn: getSession,
     retry: false
+  });
+
+  const intentMutation = useMutation({
+    mutationFn: (productId: number) => createPayIntent(productId),
+    onSuccess: (result) => navigate(`/pay/${result.token}`)
   });
 
   const buyMutation = useMutation({
@@ -770,6 +811,10 @@ export function CheckoutApp() {
     return <LoadingScreen />;
   }
 
+  if (appState.page === "intent") {
+    return <IntentLoader token={appState.token} session={session} onLoaded={(product) => setAppState({ page: "payment", product })} onError={() => navigate("/")} />;
+  }
+
   if (appState.page === "payment") {
     return (
       <PaymentPage
@@ -777,7 +822,7 @@ export function CheckoutApp() {
         session={session}
         isPending={buyMutation.isPending}
         mutationError={buyMutation.error ? "Erro ao gerar PIX. Tente novamente." : undefined}
-        onCancel={() => setAppState({ page: "products" })}
+        onCancel={() => navigate("/")}
         onSubmit={(customer) => {
           buyMutation.mutate({ productId: appState.product.id, customer });
         }}
@@ -790,7 +835,7 @@ export function CheckoutApp() {
       <>
         <ProductsPage
           session={session}
-          onSelectProduct={(product) => setAppState({ page: "payment", product })}
+          onSelectProduct={(product) => intentMutation.mutate(product.id)}
         />
         <OrderModal
           orderId={appState.orderId}
@@ -804,7 +849,7 @@ export function CheckoutApp() {
   return (
     <ProductsPage
       session={session}
-      onSelectProduct={(product) => setAppState({ page: "payment", product })}
+      onSelectProduct={(product) => intentMutation.mutate(product.id)}
     />
   );
 }

@@ -6,6 +6,7 @@ import { runMigrations } from "./migrations";
 import { createAbacatePayClient } from "./modules/checkout/abacate-pay-client";
 import { createCustomerRepository } from "./modules/checkout/customer-repository";
 import { createOrderRepository } from "./modules/checkout/order-repository";
+import { createPayIntentStore } from "./modules/checkout/pay-intent-store";
 import { createPixStore } from "./modules/checkout/pix-store";
 import { createProductRepository } from "./modules/checkout/product-repository";
 import { createCheckoutApiServer } from "./server";
@@ -19,6 +20,7 @@ const customers = createCustomerRepository(postgresHome);
 const products = createProductRepository(postgresHome);
 const abacatePay = createAbacatePayClient(env);
 const pixStore = createPixStore(redis);
+const payIntentStore = createPayIntentStore(redis);
 
 await runMigrations(postgresHome);
 
@@ -29,6 +31,7 @@ const server = createCheckoutApiServer({
   products,
   abacatePay,
   pixStore,
+  payIntentStore,
   dependencies: {
     postgresLegacy: () => pingPostgres(postgresLegacy),
     postgresHome: () => pingPostgres(postgresHome),

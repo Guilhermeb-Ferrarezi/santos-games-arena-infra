@@ -63,3 +63,13 @@ export async function getOrder(orderId: number): Promise<Order> {
 export async function cancelOrder(orderId: number): Promise<void> {
   await checkoutApi.delete(`/order/${orderId}`);
 }
+
+export async function createPayIntent(productId: number): Promise<{ token: string }> {
+  const { data } = await checkoutApi.post<{ token: string }>("/pay/intent", { productId });
+  return data;
+}
+
+export async function getPayIntent(token: string): Promise<Product> {
+  const { data } = await checkoutApi.get<{ product: Product }>(`/pay/intent/${token}`);
+  return data.product;
+}

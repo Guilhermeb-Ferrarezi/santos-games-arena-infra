@@ -5,6 +5,7 @@ import type { CheckoutApiEnv } from "../../config/env";
 import type { AbacatePayClient } from "./abacate-pay-client";
 import type { CustomerRepository } from "./customer-repository";
 import type { OrderRepository } from "./order-repository";
+import type { PayIntentStore } from "./pay-intent-store";
 import type { PixStore } from "./pix-store";
 import type { ProductRepository } from "./product-repository";
 
@@ -25,11 +26,43 @@ export function registerCheckoutRoutes(
   customers: CustomerRepository,
   products: ProductRepository,
   abacatePay: AbacatePayClient,
-  pixStore: PixStore
+  pixStore: PixStore,
+  payIntentStore: PayIntentStore
 ) {
   server.get("/products", async () => {
     const list = await products.listActive();
     return { products: list };
+  });
+
+  // ── Pay intent (link temporário via Redis) ────────────────────────────────
+  server.post("/pay/intent", async (request, reply) => {
+    const token = request.cookies[env.AUTH_COOKIE_NAME];
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    const session = await verifySessionToken(token, env);
+    if (!session) return reply.code(401).send({ error: "unauthorized" });
+
+    const { productId } = request.body as { productId?: unknown };
+    const id = Number(productId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return reply.code(400).send({ error: "invalid_product_id" });
+    }
+
+    const product = await products.findById(id);
+    if (!product) return reply.code(404).send({ error: "product_not_found" });
+
+    const intentToken = await payIntentStore.create(id);
+    return reply.code(201).send({ token: intentToken });
+  });
+
+  server.get("/pay/intent/:token", async (request, reply) => {
+    const { token } = request.params as { token: string };
+    const productId = await payIntentStore.get(token);
+    if (!productId) return reply.code(404).send({ error: "intent_not_found" });
+
+    const product = await products.findById(productId);
+    if (!product) return reply.code(404).send({ error: "product_not_found" });
+
+    return { product };
   });
 
   server.post("/order", async (request, reply) => {

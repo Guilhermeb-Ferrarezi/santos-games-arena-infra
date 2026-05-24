@@ -7,6 +7,7 @@ import type { CheckoutApiEnv } from "./config/env";
 import { checkDependencies, type DependencyPingers } from "./infra/dependencies";
 import type { AbacatePayClient } from "./modules/checkout/abacate-pay-client";
 import type { CustomerRepository } from "./modules/checkout/customer-repository";
+import type { PayIntentStore } from "./modules/checkout/pay-intent-store";
 import { registerCheckoutRoutes } from "./modules/checkout/routes";
 import type { OrderRepository } from "./modules/checkout/order-repository";
 import type { PixStore } from "./modules/checkout/pix-store";
@@ -24,10 +25,11 @@ export type CheckoutApiServerOptions = {
   products?: ProductRepository;
   abacatePay?: AbacatePayClient;
   pixStore?: PixStore;
+  payIntentStore?: PayIntentStore;
 };
 
 export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) {
-  const { env, dependencies, orders, customers, products, abacatePay, pixStore } = options;
+  const { env, dependencies, orders, customers, products, abacatePay, pixStore, payIntentStore } = options;
 
   const server = Fastify({
     logger: env?.NODE_ENV === "production"
@@ -75,7 +77,7 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
     });
   }
 
-  if (orders && customers && products && abacatePay && pixStore && env?.JWT_SECRET && env.AUTH_COOKIE_NAME) {
+  if (orders && customers && products && abacatePay && pixStore && payIntentStore && env?.JWT_SECRET && env.AUTH_COOKIE_NAME) {
     server.register(
       async (checkoutServer) => {
         registerCheckoutRoutes(
@@ -89,7 +91,8 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
           customers,
           products,
           abacatePay,
-          pixStore
+          pixStore,
+          payIntentStore
         );
       },
       { prefix: CHECKOUT_PREFIX }
