@@ -774,11 +774,13 @@ export function CheckoutApp() {
       if (orderMatch) {
         const orderId = parseInt(orderMatch[1], 10);
         const state = window.history.state as { pix?: CreateOrderResult; product?: Product } | null;
-        if (state?.product) {
-          setAppState({ page: "order", orderId, product: state.product, initialPix: state?.pix });
-        } else {
-          setAppState({ page: "products" });
-        }
+        // se tem produto no history state (navegação normal), mantém a PaymentPage como fundo
+        // se não tem (refresh direto na URL), volta para produtos
+        setAppState(
+          state?.product
+            ? { page: "order", orderId, product: state.product, initialPix: state?.pix }
+            : { page: "products" }
+        );
       } else if (intentMatch) {
         setAppState({ page: "intent", token: intentMatch[1] });
       } else {
@@ -816,7 +818,10 @@ export function CheckoutApp() {
         pixExpiresAt: result.pixExpiresAt,
         createdAt: new Date().toISOString()
       });
-      navigate(`/order/${result.orderId}`, { pix: result, product: result.product });
+      // atualiza URL sem disparar handlePath (pushState não dispara popstate nativo)
+      window.history.pushState({ pix: result, product: result.product }, "", `/order/${result.orderId}`);
+      // seta estado diretamente para garantir que o fundo é a PaymentPage
+      setAppState({ page: "order", orderId: result.orderId, product: result.product, initialPix: result });
     }
   });
 
