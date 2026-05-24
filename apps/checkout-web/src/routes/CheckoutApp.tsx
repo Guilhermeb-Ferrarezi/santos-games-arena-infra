@@ -12,7 +12,6 @@ import {
   getPayIntent,
   getSession,
   listProducts,
-  type CardAddress,
   type CreateOrderResult,
   type CustomerInfo,
   type Order,
@@ -73,38 +72,6 @@ function Spinner() {
   return (
     <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
   );
-}
-
-function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "elo" | "amex" | "unknown" }) {
-  if (brand === "visa") return (
-    <svg width="38" height="13" viewBox="0 0 48 16" xmlns="http://www.w3.org/2000/svg">
-      <text x="0" y="13" fontFamily="Arial, sans-serif" fontSize="16" fontWeight="900" fontStyle="italic" fill="#1A1F71" letterSpacing="-0.5">VISA</text>
-    </svg>
-  );
-  if (brand === "mastercard") return (
-    <svg width="32" height="20" viewBox="0 0 38 24" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="14" cy="12" r="10" fill="#EB001B"/>
-      <circle cx="24" cy="12" r="10" fill="#F79E1B"/>
-      <path d="M19 4.8a10 10 0 0 1 0 14.4A10 10 0 0 1 19 4.8z" fill="#FF5F00"/>
-    </svg>
-  );
-  if (brand === "amex") return (
-    <svg width="38" height="14" viewBox="0 0 48 16" xmlns="http://www.w3.org/2000/svg">
-      <rect width="48" height="16" rx="2" fill="#2E77BC"/>
-      <text x="4" y="11.5" fontFamily="Arial, sans-serif" fontSize="8.5" fontWeight="700" fill="white" letterSpacing="0.3">AMERICAN</text>
-      <text x="4" y="14.5" fontFamily="Arial, sans-serif" fontSize="5" fontWeight="400" fill="white" letterSpacing="2">EXPRESS</text>
-    </svg>
-  );
-  if (brand === "elo") return (
-    <svg width="32" height="20" viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
-      <rect width="40" height="24" rx="3" fill="#000"/>
-      <circle cx="12" cy="12" r="6" fill="#FFD500"/>
-      <circle cx="12" cy="12" r="4" fill="#000"/>
-      <path d="M12 6 A6 6 0 0 1 18 12" stroke="#FFD500" strokeWidth="2" fill="none"/>
-      <text x="20" y="16" fontFamily="Arial, sans-serif" fontSize="10" fontWeight="700" fill="white">elo</text>
-    </svg>
-  );
-  return null;
 }
 
 // ── UI primitives ─────────────────────────────────────────────────────────────
@@ -418,37 +385,6 @@ function OrderModal({
 const inputCls =
   "w-full bg-surface-2 border border-border/60 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/60 transition-colors";
 
-function formatCardNumber(v: string): string {
-  return v.replace(/\D/g, "").slice(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ");
-}
-
-function formatExpiry(v: string): string {
-  const d = v.replace(/\D/g, "").slice(0, 4);
-  return d.length >= 3 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
-}
-
-function detectBrand(n: string): "visa" | "mastercard" | "elo" | "amex" | "unknown" {
-  const d = n.replace(/\s/g, "");
-  if (/^4/.test(d)) return "visa";
-  if (/^5[1-5]|^2[2-7]/.test(d)) return "mastercard";
-  if (/^6(36368|36297|504175|362|363)/.test(d)) return "elo";
-  if (/^3[47]/.test(d)) return "amex";
-  return "unknown";
-}
-
-function luhn(num: string): boolean {
-  const d = num.replace(/\s/g, "");
-  let sum = 0;
-  let odd = false;
-  for (let i = d.length - 1; i >= 0; i--) {
-    let n = parseInt(d[i]);
-    if (odd) { n *= 2; if (n > 9) n -= 9; }
-    sum += n;
-    odd = !odd;
-  }
-  return sum % 10 === 0;
-}
-
 function PaymentPage({
   product,
   session,
@@ -465,8 +401,6 @@ function PaymentPage({
   onSubmit: (data: {
     name: string; email: string; taxId: string; cellphone: string;
     method: "pix" | "card";
-    card?: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string };
-    address?: CardAddress;
     saveInfo: boolean;
   }) => void;
   isPending: boolean;
@@ -485,23 +419,10 @@ function PaymentPage({
       ? savedCustomer.cellphone.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3")
       : ""
   );
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-  const [zipCode, setZipCode] = useState("");
-  const [street, setStreet] = useState("");
-  const [addressNumber, setAddressNumber] = useState("");
-  const [complement, setComplement] = useState("");
-  const [neighborhood, setNeighborhood] = useState("");
-  const [city, setCity] = useState("");
-  const [addressState, setAddressState] = useState("");
-  const [cepLoading, setCepLoading] = useState(false);
   const [saveInfo, setSaveInfo] = useState(!savedCustomer);
 
   type FieldErrors = {
     name?: string; email?: string; taxId?: string; cellphone?: string;
-    cardNumber?: string; cardExpiry?: string; cardCvv?: string;
-    zipCode?: string; street?: string; addressNumber?: string; neighborhood?: string; city?: string; addressState?: string;
   };
   const [touched, setTouched] = useState<Partial<Record<keyof FieldErrors, true>>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -517,29 +438,6 @@ function PaymentPage({
     return d.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
   }
 
-  function formatCep(v: string): string {
-    const d = v.replace(/\D/g, "").slice(0, 8);
-    return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
-  }
-
-  async function lookupCep(cep: string) {
-    const digits = cep.replace(/\D/g, "");
-    if (digits.length !== 8) return;
-    setCepLoading(true);
-    try {
-      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-      const json = await res.json() as { erro?: boolean; logradouro?: string; bairro?: string; localidade?: string; uf?: string };
-      if (!json.erro) {
-        setStreet(json.logradouro ?? "");
-        setNeighborhood(json.bairro ?? "");
-        setCity(json.localidade ?? "");
-        setAddressState(json.uf ?? "");
-      }
-    } catch { /* silent */ } finally {
-      setCepLoading(false);
-    }
-  }
-
   function validateCpf(raw: string): boolean {
     const d = raw.replace(/\D/g, "");
     if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
@@ -552,40 +450,16 @@ function PaymentPage({
     return calc(9) === parseInt(d[9]) && calc(10) === parseInt(d[10]);
   }
 
-  function validate(
-    vals: { name: string; email: string; taxId: string; cellphone: string; cardNumber: string; cardExpiry: string; cardCvv: string; zipCode: string; street: string; addressNumber: string; neighborhood: string; city: string; addressState: string },
-    method: "pix" | "card"
-  ) {
+  function validate(vals: { name: string; email: string; taxId: string; cellphone: string }) {
     const e: FieldErrors = {};
     if (vals.name.trim().length < 3) e.name = "Informe seu nome completo.";
     if (!/\S+@\S+\.\S+/.test(vals.email.trim())) e.email = "E-mail inválido.";
     if (!validateCpf(vals.taxId)) e.taxId = "CPF inválido.";
     if (vals.cellphone.replace(/\D/g, "").length < 10) e.cellphone = "Telefone inválido.";
-    if (method === "card") {
-      const digits = vals.cardNumber?.replace(/\s/g, "") ?? "";
-      if (digits.length < 13 || !luhn(digits)) e.cardNumber = "Número de cartão inválido.";
-      const [mm, yy] = (vals.cardExpiry ?? "").split("/");
-      const now = new Date();
-      const expMonth = parseInt(mm), expYear = 2000 + parseInt(yy ?? "0");
-      if (!mm || !yy || isNaN(expMonth) || expMonth < 1 || expMonth > 12 ||
-          expYear < now.getFullYear() || (expYear === now.getFullYear() && expMonth < now.getMonth() + 1)) {
-        e.cardExpiry = "Validade inválida.";
-      }
-      if (!vals.cardCvv || vals.cardCvv.replace(/\D/g, "").length < 3) e.cardCvv = "CVV inválido.";
-      if (vals.zipCode.replace(/\D/g, "").length !== 8) e.zipCode = "CEP inválido.";
-      if (vals.street.trim().length < 2) e.street = "Informe o logradouro.";
-      if (vals.addressNumber.trim().length < 1) e.addressNumber = "Informe o número.";
-      if (vals.neighborhood.trim().length < 2) e.neighborhood = "Informe o bairro.";
-      if (vals.city.trim().length < 2) e.city = "Informe a cidade.";
-      if (vals.addressState.trim().length !== 2) e.addressState = "UF inválido.";
-    }
     return e;
   }
 
-  const allErrors = validate(
-    { name, email, taxId, cellphone, cardNumber, cardExpiry, cardCvv, zipCode, street, addressNumber, neighborhood, city, addressState },
-    paymentMethod
-  );
+  const allErrors = validate({ name, email, taxId, cellphone });
   const errors: FieldErrors = submitted
     ? allErrors
     : Object.fromEntries(Object.entries(allErrors).filter(([k]) => touched[k as keyof FieldErrors]));
@@ -602,45 +476,15 @@ function PaymentPage({
     ev.preventDefault();
     setSubmitted(true);
     if (Object.keys(allErrors).length > 0) return;
-    if (paymentMethod === "card") {
-      const [mm, yy] = cardExpiry.split("/");
-      onSubmit({
-        name: name.trim(),
-        email: email.trim(),
-        taxId: taxId.replace(/\D/g, ""),
-        cellphone: cellphone.replace(/\D/g, ""),
-        method: "card",
-        saveInfo,
-        card: {
-          number: cardNumber.replace(/\s/g, ""),
-          holderName: name.trim(),
-          expiryMonth: mm,
-          expiryYear: `20${yy}`,
-          cvv: cardCvv
-        },
-        address: {
-          zipCode: zipCode.replace(/\D/g, ""),
-          street: street.trim(),
-          number: addressNumber.trim(),
-          complement: complement.trim() || undefined,
-          neighborhood: neighborhood.trim(),
-          city: city.trim(),
-          state: addressState.trim().toUpperCase()
-        }
-      });
-    } else {
-      onSubmit({
-        name: name.trim(),
-        email: email.trim(),
-        taxId: taxId.replace(/\D/g, ""),
-        cellphone: cellphone.replace(/\D/g, ""),
-        method: "pix",
-        saveInfo
-      });
-    }
+    onSubmit({
+      name: name.trim(),
+      email: email.trim(),
+      taxId: taxId.replace(/\D/g, ""),
+      cellphone: cellphone.replace(/\D/g, ""),
+      method: paymentMethod,
+      saveInfo
+    });
   }
-
-  void detectBrand;
 
   const features = product.features?.length > 0
     ? product.features
@@ -748,161 +592,13 @@ function PaymentPage({
               </FormField>
 
               {paymentMethod === "card" && (
-                <>
-                  <FormField label="Número do cartão" error={errors.cardNumber}>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="0000 0000 0000 0000"
-                        value={cardNumber}
-                        className={inputCls + " pr-14"}
-                        onChange={(e) => updateField("cardNumber", setCardNumber, formatCardNumber(e.target.value))}
-                        onBlur={() => handleBlur("cardNumber")}
-                        disabled={isPending}
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                        <CardBrandIcon brand={detectBrand(cardNumber)} />
-                      </span>
-                    </div>
-                  </FormField>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <FormField label="Validade" error={errors.cardExpiry}>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="MM/AA"
-                        value={cardExpiry}
-                        className={inputCls}
-                        onChange={(e) => updateField("cardExpiry", setCardExpiry, formatExpiry(e.target.value))}
-                        onBlur={() => handleBlur("cardExpiry")}
-                        disabled={isPending}
-                      />
-                    </FormField>
-                    <FormField label="CVV" error={errors.cardCvv}>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="CVV"
-                        value={cardCvv}
-                        maxLength={4}
-                        className={inputCls}
-                        onChange={(e) => updateField("cardCvv", setCardCvv, e.target.value.replace(/\D/g, "").slice(0, 4))}
-                        onBlur={() => handleBlur("cardCvv")}
-                        disabled={isPending}
-                      />
-                    </FormField>
-                  </div>
-
-                  <div className="border-t border-border/40 pt-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                      Endereço de cobrança
-                    </p>
-
-                    <div className="flex flex-col gap-4">
-                      <FormField label="CEP" error={errors.zipCode}>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="00000-000"
-                            value={zipCode}
-                            className={inputCls}
-                            onChange={(e) => {
-                              const formatted = formatCep(e.target.value);
-                              updateField("zipCode", setZipCode, formatted);
-                              if (formatted.replace(/\D/g, "").length === 8) lookupCep(formatted);
-                            }}
-                            onBlur={() => handleBlur("zipCode")}
-                            disabled={isPending}
-                          />
-                          {cepLoading && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                              <Spinner />
-                            </span>
-                          )}
-                        </div>
-                      </FormField>
-
-                      <FormField label="Rua / Endereço" error={errors.street}>
-                        <input
-                          type="text"
-                          placeholder="Rua, Avenida…"
-                          value={street}
-                          className={inputCls}
-                          onChange={(e) => updateField("street", setStreet, e.target.value)}
-                          onBlur={() => handleBlur("street")}
-                          disabled={isPending}
-                        />
-                      </FormField>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField label="Número" error={errors.addressNumber}>
-                          <input
-                            type="text"
-                            placeholder="123"
-                            value={addressNumber}
-                            className={inputCls}
-                            onChange={(e) => updateField("addressNumber", setAddressNumber, e.target.value)}
-                            onBlur={() => handleBlur("addressNumber")}
-                            disabled={isPending}
-                          />
-                        </FormField>
-                        <FormField label="Complemento" error={undefined}>
-                          <input
-                            type="text"
-                            placeholder="Apto, Bloco…"
-                            value={complement}
-                            className={inputCls}
-                            onChange={(e) => setComplement(e.target.value)}
-                            disabled={isPending}
-                          />
-                        </FormField>
-                      </div>
-
-                      <FormField label="Bairro" error={errors.neighborhood}>
-                        <input
-                          type="text"
-                          placeholder="Bairro"
-                          value={neighborhood}
-                          className={inputCls}
-                          onChange={(e) => updateField("neighborhood", setNeighborhood, e.target.value)}
-                          onBlur={() => handleBlur("neighborhood")}
-                          disabled={isPending}
-                        />
-                      </FormField>
-
-                      <div className="grid grid-cols-[1fr_80px] gap-3">
-                        <FormField label="Cidade" error={errors.city}>
-                          <input
-                            type="text"
-                            placeholder="Cidade"
-                            value={city}
-                            className={inputCls}
-                            onChange={(e) => updateField("city", setCity, e.target.value)}
-                            onBlur={() => handleBlur("city")}
-                            disabled={isPending}
-                          />
-                        </FormField>
-                        <FormField label="UF" error={errors.addressState}>
-                          <select
-                            value={addressState}
-                            className={inputCls}
-                            onChange={(e) => updateField("addressState", setAddressState, e.target.value)}
-                            onBlur={() => handleBlur("addressState")}
-                            disabled={isPending}
-                          >
-                            <option value="">UF</option>
-                            {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
-                              <option key={uf} value={uf}>{uf}</option>
-                            ))}
-                          </select>
-                        </FormField>
-                      </div>
-                    </div>
-                  </div>
-                </>
+                <div className="flex items-start gap-3 border border-border/40 bg-surface-2 px-4 py-3 text-sm text-muted-foreground">
+                  <CreditCardIcon size={16} />
+                  <p className="leading-snug">
+                    Você será redirecionado para a página segura da AbacatePay para inserir os dados do cartão.
+                    Seus dados pessoais acima serão enviados automaticamente.
+                  </p>
+                </div>
               )}
 
               <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -1201,22 +897,10 @@ export function CheckoutApp() {
   });
 
   const cardMutation = useMutation({
-    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string }; address?: CardAddress; saveInfo: boolean }) =>
-      createCardOrder(vars.productId, vars.customer, vars.card, vars.address, vars.saveInfo).then((r) => ({ ...r, product: vars.product })),
+    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; saveInfo: boolean }) =>
+      createCardOrder(vars.productId, vars.customer, vars.saveInfo),
     onSuccess: (result) => {
-      queryClient.setQueryData(["order", result.orderId], {
-        id: result.orderId,
-        productId: "",
-        description: "",
-        amountCents: result.amountCents,
-        status: result.status,
-        pixCode: null,
-        pixCodeBase64: null,
-        pixExpiresAt: null,
-        createdAt: new Date().toISOString()
-      });
-      window.history.pushState({ product: result.product }, "", `/order/${result.orderId}`);
-      setAppState({ page: "order", orderId: result.orderId, product: result.product });
+      window.location.href = result.checkoutUrl;
     }
   });
 
@@ -1249,13 +933,11 @@ export function CheckoutApp() {
         }
         onCancel={() => navigate("/")}
         onSubmit={(data) => {
-          if (data.method === "card" && data.card) {
+          if (data.method === "card") {
             cardMutation.mutate({
               productId: appState.product.id,
               product: appState.product,
               customer: { name: data.name, email: data.email, taxId: data.taxId, cellphone: data.cellphone },
-              card: data.card,
-              address: data.address,
               saveInfo: data.saveInfo
             });
           } else {

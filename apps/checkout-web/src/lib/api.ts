@@ -38,6 +38,7 @@ export type CreateCardOrderResult = {
   orderId: number;
   amountCents: number;
   status: "pending" | "paid";
+  checkoutUrl: string;
 };
 
 export type CardAddress = {
@@ -75,16 +76,12 @@ export async function createOrder(
 export async function createCardOrder(
   productId: number,
   customer: { name: string; email: string; taxId: string; cellphone: string },
-  card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string; installments?: number },
-  address?: CardAddress,
   saveInfo?: boolean
 ): Promise<CreateCardOrderResult> {
   const { data } = await checkoutApi.post<CreateCardOrderResult>("/order", {
     productId,
     method: "card",
     customer,
-    card,
-    address,
     saveInfo
   });
   return data;

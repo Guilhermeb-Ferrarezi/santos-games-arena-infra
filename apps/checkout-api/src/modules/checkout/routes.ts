@@ -19,23 +19,6 @@ const createOrderBodySchema = z.object({
     taxId: z.string().trim().min(11).max(14),
     cellphone: z.string().trim().min(10)
   }).optional(),
-  card: z.object({
-    number: z.string().trim().min(13).max(19),
-    holderName: z.string().trim().min(2).max(100),
-    expiryMonth: z.string().length(2),
-    expiryYear: z.string().length(4),
-    cvv: z.string().min(3).max(4),
-    installments: z.number().int().min(1).max(12).default(1)
-  }).optional(),
-  address: z.object({
-    zipCode: z.string().trim().min(8).max(9),
-    street: z.string().trim().min(2).max(200),
-    number: z.string().trim().min(1).max(20),
-    complement: z.string().trim().max(100).optional(),
-    neighborhood: z.string().trim().min(2).max(100),
-    city: z.string().trim().min(2).max(100),
-    state: z.string().trim().length(2)
-  }).optional()
 });
 
 export function registerCheckoutRoutes(
@@ -135,50 +118,37 @@ export function registerCheckoutRoutes(
       : undefined;
 
     if (parsed.data.method === "card") {
-      if (!customer) {
-        return reply.code(400).send({ error: "customer_required" });
+      let customerId: string | undefined;
+      if (customer) {
+        const customerResult = await abacatePay.createCustomer({
+          name: customer.name,
+          email: customer.email,
+          taxId: customer.taxId,
+          cellphone: customer.cellphone
+        });
+        if (customerResult.ok) customerId = customerResult.customerId;
       }
 
-      const cardInput = parsed.data.card!;
-      const addr = parsed.data.address;
-      const cardResult = await abacatePay.createTransparentCard({
-        amountCents: product.amountCents,
-        description: product.name,
-        installments: cardInput.installments,
-        card: {
-          number: cardInput.number.replace(/\s/g, ""),
-          holderName: cardInput.holderName,
-          expiryMonth: cardInput.expiryMonth,
-          expiryYear: cardInput.expiryYear,
-          cvv: cardInput.cvv
-        },
-        customer,
-        address: addr
-          ? {
-              zipCode: addr.zipCode.replace(/\D/g, ""),
-              street: addr.street,
-              number: addr.number,
-              complement: addr.complement,
-              neighborhood: addr.neighborhood,
-              city: addr.city,
-              state: addr.state.toUpperCase()
-            }
-          : undefined
+      const billing = await abacatePay.createBilling({
+        customerId,
+        products: [{
+          externalId: String(product.id),
+          name: product.name,
+          description: product.name,
+          quantity: 1,
+          price: product.amountCents
+        }],
+        completionUrl: env.CHECKOUT_WEB_URL ? `${env.CHECKOUT_WEB_URL}/order/${order.id}` : undefined,
+        returnUrl: env.CHECKOUT_WEB_URL ?? undefined,
+        methods: ["CARD"]
       });
 
-      if (!cardResult.ok) {
+      if (!billing.ok) {
         await orders.failById(order.id);
-        return reply.code(502).send({ error: "card_error", message: cardResult.error });
+        return reply.code(502).send({ error: "billing_error", message: billing.error });
       }
 
-      await orders.updateBilling(order.id, cardResult.cardId, null);
-
-      if (cardResult.status === "PAID") {
-        await orders.updateStatus(cardResult.cardId, "paid");
-      } else if (cardResult.status === "FAILED") {
-        await orders.updateStatus(cardResult.cardId, "failed");
-        return reply.code(402).send({ error: "card_declined" });
-      }
+      await orders.updateBilling(order.id, billing.billingId, null);
 
       if (customer && parsed.data.saveInfo) {
         await customers.saveInfo(session.userId, {
@@ -191,7 +161,8 @@ export function registerCheckoutRoutes(
       return reply.code(201).send({
         orderId: order.id,
         amountCents: product.amountCents,
-        status: cardResult.status === "PAID" ? "paid" : "pending"
+        status: "pending",
+        checkoutUrl: billing.checkoutUrl
       });
     }
 

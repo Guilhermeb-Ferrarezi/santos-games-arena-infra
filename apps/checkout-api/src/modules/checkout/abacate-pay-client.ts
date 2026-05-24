@@ -20,10 +20,11 @@ export type CreateCustomerResult =
   | { ok: false; error: string };
 
 export type CreateBillingInput = {
-  customerId: string;
+  customerId?: string;
   products: AbacatePayProduct[];
   returnUrl?: string;
   completionUrl?: string;
+  methods?: string[];
 };
 
 export type CreateBillingResult =
@@ -152,7 +153,7 @@ export function createAbacatePayClient(
         ...(input.customerId ? { customerId: input.customerId } : {}),
         ...(input.returnUrl ? { returnUrl: input.returnUrl } : {}),
         ...(input.completionUrl ? { completionUrl: input.completionUrl } : {}),
-        methods: ["PIX"]
+        methods: input.methods ?? ["PIX"]
       })
     });
 
@@ -229,7 +230,7 @@ export function createAbacatePayClient(
       error?: string | null;
     };
 
-    console.log("[abacate-pay] transparent card response", response.status, json.error ?? "ok");
+    console.log("[abacate-pay] transparent card response", response.status, JSON.stringify(json));
 
     if (!response.ok || json.error || !json.data) {
       return { ok: false, error: json.error ?? `HTTP ${response.status}` };
