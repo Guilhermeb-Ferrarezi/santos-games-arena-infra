@@ -12,6 +12,7 @@ import type { ProductRepository } from "./product-repository";
 const createOrderBodySchema = z.object({
   productId: z.number().int().positive(),
   method: z.enum(["pix", "card"]).default("pix"),
+  saveInfo: z.boolean().default(true),
   customer: z.object({
     name: z.string().trim().min(2).max(100),
     email: z.string().email(),
@@ -179,7 +180,7 @@ export function registerCheckoutRoutes(
         return reply.code(402).send({ error: "card_declined" });
       }
 
-      if (customer) {
+      if (customer && parsed.data.saveInfo) {
         await customers.saveInfo(session.userId, {
           name: customer.name,
           taxId: customer.taxId,
@@ -211,7 +212,7 @@ export function registerCheckoutRoutes(
       expiresAt: pix.expiresAt
     });
 
-    if (customer) {
+    if (customer && parsed.data.saveInfo) {
       await customers.saveInfo(session.userId, {
         name: customer.name,
         taxId: customer.taxId,

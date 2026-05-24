@@ -65,9 +65,10 @@ export async function listProducts(): Promise<Product[]> {
 
 export async function createOrder(
   productId: number,
-  customer?: { name: string; email: string; taxId: string; cellphone: string }
+  customer?: { name: string; email: string; taxId: string; cellphone: string },
+  saveInfo?: boolean
 ): Promise<CreateOrderResult> {
-  const { data } = await checkoutApi.post<CreateOrderResult>("/order", { productId, customer });
+  const { data } = await checkoutApi.post<CreateOrderResult>("/order", { productId, customer, saveInfo });
   return data;
 }
 
@@ -75,14 +76,16 @@ export async function createCardOrder(
   productId: number,
   customer: { name: string; email: string; taxId: string; cellphone: string },
   card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string; installments?: number },
-  address?: CardAddress
+  address?: CardAddress,
+  saveInfo?: boolean
 ): Promise<CreateCardOrderResult> {
   const { data } = await checkoutApi.post<CreateCardOrderResult>("/order", {
     productId,
     method: "card",
     customer,
     card,
-    address
+    address,
+    saveInfo
   });
   return data;
 }

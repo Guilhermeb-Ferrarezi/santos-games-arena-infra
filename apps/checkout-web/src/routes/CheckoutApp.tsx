@@ -75,6 +75,19 @@ function Spinner() {
   );
 }
 
+function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "elo" | "amex" | "unknown" }) {
+  if (brand === "unknown") return null;
+  const src = `/${brand}.svg`;
+  const dims: Record<string, { w: number; h: number }> = {
+    visa: { w: 38, h: 13 },
+    mastercard: { w: 32, h: 20 },
+    amex: { w: 38, h: 13 },
+    elo: { w: 36, h: 12 }
+  };
+  const d = dims[brand];
+  return <img src={src} alt={brand} width={d.w} height={d.h} style={{ display: "block" }} />;
+}
+
 // ── UI primitives ─────────────────────────────────────────────────────────────
 
 function FormField({
@@ -435,6 +448,7 @@ function PaymentPage({
     method: "pix" | "card";
     card?: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string };
     address?: CardAddress;
+    saveInfo: boolean;
   }) => void;
   isPending: boolean;
   mutationError?: string;
@@ -463,6 +477,7 @@ function PaymentPage({
   const [city, setCity] = useState("");
   const [addressState, setAddressState] = useState("");
   const [cepLoading, setCepLoading] = useState(false);
+  const [saveInfo, setSaveInfo] = useState(!savedCustomer);
 
   type FieldErrors = {
     name?: string; email?: string; taxId?: string; cellphone?: string;
@@ -561,10 +576,8 @@ function PaymentPage({
   }
 
   function handleBlur(field: keyof FieldErrors, currentValue: string) {
-    if (!submitted) {
-      const e = validate(currentAddrVals({ [field]: currentValue }), paymentMethod);
-      if (e[field]) setErrors((prev) => ({ ...prev, [field]: e[field] }));
-    }
+    const e = validate(currentAddrVals({ [field]: currentValue }), paymentMethod);
+    if (submitted || e[field]) setErrors((prev) => ({ ...prev, [field]: e[field] }));
   }
 
   function handleSubmit(ev: React.FormEvent) {
@@ -582,6 +595,7 @@ function PaymentPage({
         taxId: vals.taxId.replace(/\D/g, ""),
         cellphone: vals.cellphone.replace(/\D/g, ""),
         method: "card",
+        saveInfo,
         card: {
           number: cardNumber.replace(/\s/g, ""),
           holderName: vals.name.trim(),
@@ -605,7 +619,8 @@ function PaymentPage({
         email: vals.email.trim(),
         taxId: vals.taxId.replace(/\D/g, ""),
         cellphone: vals.cellphone.replace(/\D/g, ""),
-        method: "pix"
+        method: "pix",
+        saveInfo
       });
     }
   }
@@ -624,7 +639,7 @@ function PaymentPage({
         <div className="flex w-full max-w-4xl flex-col gap-8 md:flex-row md:items-start md:gap-10">
 
           {/* ── Coluna esquerda: form ── */}
-          <div className="w-full min-w-0 max-w-sm">
+          <div className="w-full min-w-0 max-w-sm mx-auto md:mx-0">
             {/* Mobile: product info */}
             <div className="mb-6 text-center md:hidden">
               <span className="inline-block border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest text-primary">
@@ -720,16 +735,21 @@ function PaymentPage({
               {paymentMethod === "card" && (
                 <>
                   <FormField label="Número do cartão" error={errors.cardNumber}>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="0000 0000 0000 0000"
-                      value={cardNumber}
-                      className={inputCls}
-                      onChange={(e) => updateField("cardNumber", setCardNumber, formatCardNumber(e.target.value))}
-                      onBlur={(e) => handleBlur("cardNumber", e.target.value)}
-                      disabled={isPending}
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="0000 0000 0000 0000"
+                        value={cardNumber}
+                        className={inputCls + " pr-14"}
+                        onChange={(e) => updateField("cardNumber", setCardNumber, formatCardNumber(e.target.value))}
+                        onBlur={(e) => handleBlur("cardNumber", e.target.value)}
+                        disabled={isPending}
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+                        <CardBrandIcon brand={detectBrand(cardNumber)} />
+                      </span>
+                    </div>
                   </FormField>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -851,22 +871,35 @@ function PaymentPage({
                           />
                         </FormField>
                         <FormField label="UF" error={errors.addressState}>
-                          <input
-                            type="text"
-                            placeholder="SP"
+                          <select
                             value={addressState}
-                            maxLength={2}
                             className={inputCls}
-                            onChange={(e) => updateField("addressState", setAddressState, e.target.value.toUpperCase().slice(0, 2))}
+                            onChange={(e) => updateField("addressState", setAddressState, e.target.value)}
                             onBlur={(e) => handleBlur("addressState", e.target.value)}
                             disabled={isPending}
-                          />
+                          >
+                            <option value="">UF</option>
+                            {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
+                              <option key={uf} value={uf}>{uf}</option>
+                            ))}
+                          </select>
                         </FormField>
                       </div>
                     </div>
                   </div>
                 </>
               )}
+
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={saveInfo}
+                  onChange={(e) => setSaveInfo(e.target.checked)}
+                  disabled={isPending}
+                  className="h-4 w-4 accent-primary"
+                />
+                <span className="text-xs text-muted-foreground">Salvar meus dados para próximas compras</span>
+              </label>
 
               {mutationError && (
                 <p className="text-xs text-destructive border border-destructive/30 bg-destructive/10 px-3 py-2">
@@ -904,7 +937,7 @@ function PaymentPage({
           </div>
 
           {/* ── Coluna direita: card de resumo ── */}
-          <div className="flex-1 md:block">
+          <div className="w-full max-w-sm mx-auto md:max-w-none md:flex-1 md:mx-0">
             <div className="border border-border/60 bg-surface-1 p-6 flex flex-col gap-5">
               {/* Nome do produto */}
               <h2 className="text-3xl font-display font-bold leading-tight">{product.name}</h2>
@@ -1131,8 +1164,8 @@ export function CheckoutApp() {
   });
 
   const buyMutation = useMutation({
-    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string } }) =>
-      createOrder(vars.productId, vars.customer).then((r) => ({ ...r, product: vars.product })),
+    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; saveInfo: boolean }) =>
+      createOrder(vars.productId, vars.customer, vars.saveInfo).then((r) => ({ ...r, product: vars.product })),
     onSuccess: (result) => {
       queryClient.setQueryData(["order", result.orderId], {
         id: result.orderId,
@@ -1153,8 +1186,8 @@ export function CheckoutApp() {
   });
 
   const cardMutation = useMutation({
-    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string }; address?: CardAddress }) =>
-      createCardOrder(vars.productId, vars.customer, vars.card, vars.address).then((r) => ({ ...r, product: vars.product })),
+    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; card: { number: string; holderName: string; expiryMonth: string; expiryYear: string; cvv: string }; address?: CardAddress; saveInfo: boolean }) =>
+      createCardOrder(vars.productId, vars.customer, vars.card, vars.address, vars.saveInfo).then((r) => ({ ...r, product: vars.product })),
     onSuccess: (result) => {
       queryClient.setQueryData(["order", result.orderId], {
         id: result.orderId,
@@ -1192,11 +1225,12 @@ export function CheckoutApp() {
         isPending={buyMutation.isPending || cardMutation.isPending}
         mutationError={
           buyMutation.error ? "Erro ao gerar PIX. Tente novamente." :
-          cardMutation.error ? (
-            (cardMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error === "card_declined"
-              ? "Cartão recusado. Verifique os dados ou use outro cartão."
-              : "Erro ao processar cartão. Tente novamente."
-          ) : undefined
+          cardMutation.error ? (() => {
+            const d = (cardMutation.error as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+            if (d?.error === "card_declined") return "Cartão recusado. Verifique os dados ou use outro cartão.";
+            if (d?.message) return `Erro ao processar cartão: ${d.message}`;
+            return "Erro ao processar cartão. Tente novamente.";
+          })() : undefined
         }
         onCancel={() => navigate("/")}
         onSubmit={(data) => {
@@ -1206,13 +1240,15 @@ export function CheckoutApp() {
               product: appState.product,
               customer: { name: data.name, email: data.email, taxId: data.taxId, cellphone: data.cellphone },
               card: data.card,
-              address: data.address
+              address: data.address,
+              saveInfo: data.saveInfo
             });
           } else {
             buyMutation.mutate({
               productId: appState.product.id,
               product: appState.product,
-              customer: { name: data.name, email: data.email, taxId: data.taxId, cellphone: data.cellphone }
+              customer: { name: data.name, email: data.email, taxId: data.taxId, cellphone: data.cellphone },
+              saveInfo: data.saveInfo
             });
           }
         }}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 16">
+  <rect width="48" height="16" rx="2" fill="#2E77BC"/>
+  <text x="5" y="12" font-family="Arial, sans-serif" font-size="8" font-weight="700" fill="white" letter-spacing="0.5">AMERICAN</text>
+  <text x="5" y="13.5" font-family="Arial, sans-serif" font-size="5.5" font-weight="400" fill="white" letter-spacing="1.8">EXPRESS</text>
+</svg>
