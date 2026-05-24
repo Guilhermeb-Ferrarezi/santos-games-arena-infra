@@ -40,7 +40,7 @@ function SgHeader({ userLogin }: { userLogin?: string }) {
           <img
             src="/logo.png"
             alt="Santos Games"
-            className="h-9 w-9"
+            className="h-9 w-9 object-contain"
             style={{ filter: "brightness(0) invert(1)" }}
           />
           <span className="text-xl font-display font-bold tracking-wide text-foreground">
@@ -72,15 +72,19 @@ function PixCountdown({ expiresAt }: { expiresAt: string }) {
   const seconds = remaining % 60;
 
   if (remaining === 0) {
-    return <span className="text-destructive text-sm font-medium">PIX expirado</span>;
+    return <span className="inline-flex items-center border px-2 py-0.5 text-xs font-semibold text-destructive border-destructive/40 bg-destructive/10">PIX expirado</span>;
   }
 
+  const badgeClass =
+    remaining > 120
+      ? "text-success border-success/40 bg-success/10"
+      : remaining > 60
+        ? "text-amber-400 border-amber-400/40 bg-amber-400/10"
+        : "text-destructive border-destructive/40 bg-destructive/10";
+
   return (
-    <span className="text-muted-foreground text-sm tabular-nums">
-      Expira em{" "}
-      <span className="text-foreground font-semibold">
-        {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
-      </span>
+    <span className={`inline-flex items-center border px-2 py-0.5 text-xs font-semibold tabular-nums ${badgeClass}`}>
+      Expira em {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
     </span>
   );
 }
@@ -154,9 +158,9 @@ function PixPaymentPage({
 
       <main className="mx-auto w-full max-w-md px-4 py-10">
         <div className="mb-6 text-center">
-          <p className="text-muted-foreground text-sm uppercase tracking-widest font-semibold mb-1">
+          <span className="inline-block border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-widest text-primary mb-2">
             Pagamento via PIX
-          </p>
+          </span>
           <h2 className="text-2xl font-display font-bold">{order.description}</h2>
           <p className="mt-1 text-3xl font-display font-bold text-primary">
             {formatCurrency(order.amountCents)}
@@ -164,7 +168,7 @@ function PixPaymentPage({
         </div>
 
         <div className="rounded-lg border border-border/60 bg-surface-1 overflow-hidden">
-          <div className="flex justify-center bg-white p-6">
+          <div className="flex justify-center bg-white p-6 shadow-inner">
             <img
               src={pixCodeBase64}
               alt="QR Code PIX"
@@ -172,32 +176,26 @@ function PixPaymentPage({
             />
           </div>
 
-          <div className="p-5 flex flex-col gap-4">
+          <div className="p-5 flex flex-col gap-4 border-t border-border/40">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Pedido #{order.id}</span>
               <PixCountdown expiresAt={pixExpiresAt} />
             </div>
 
-            <div className="rounded border border-border/40 bg-surface-2 px-3 py-2">
-              <p className="text-xs text-muted-foreground mb-1">Código copia e cola</p>
-              <p className="text-xs font-mono break-all text-foreground/80 leading-relaxed select-all">
-                {pixCode}
-              </p>
-            </div>
-
-            <Button className="w-full" onClick={handleCopy}>
-              {copied ? "Copiado!" : "Copiar código PIX"}
+            <Button className="w-full transition-all" onClick={handleCopy}>
+              {copied ? "✓ Copiado!" : "Copiar código PIX"}
             </Button>
 
-            <p className="text-center text-xs text-muted-foreground">
+            <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+              <span className="inline-block h-1.5 w-1.5 bg-success animate-pulse" style={{ borderRadius: "50%" }} />
               Aguardando confirmação do pagamento…
             </p>
           </div>
         </div>
 
         <Button
-          variant="outline"
-          className="mt-4 w-full"
+          variant="ghost"
+          className="mt-2 w-full text-muted-foreground hover:text-foreground"
           onClick={() => window.history.pushState({}, "", "/")}
         >
           Voltar aos planos
