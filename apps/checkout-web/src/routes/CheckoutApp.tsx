@@ -761,7 +761,7 @@ type AppState =
   | { page: "products" }
   | { page: "intent"; token: string }
   | { page: "payment"; product: Product }
-  | { page: "order"; orderId: number; initialPix?: CreateOrderResult };
+  | { page: "order"; orderId: number; product: Product; initialPix?: CreateOrderResult };
 
 export function CheckoutApp() {
   const queryClient = useQueryClient();
@@ -773,8 +773,12 @@ export function CheckoutApp() {
       const intentMatch = window.location.pathname.match(/^\/pay\/([a-f0-9]+)$/);
       if (orderMatch) {
         const orderId = parseInt(orderMatch[1], 10);
-        const state = window.history.state as { pix?: CreateOrderResult } | null;
-        setAppState({ page: "order", orderId, initialPix: state?.pix });
+        const state = window.history.state as { pix?: CreateOrderResult; product?: Product } | null;
+        if (state?.product) {
+          setAppState({ page: "order", orderId, product: state.product, initialPix: state?.pix });
+        } else {
+          setAppState({ page: "products" });
+        }
       } else if (intentMatch) {
         setAppState({ page: "intent", token: intentMatch[1] });
       } else {
@@ -798,8 +802,8 @@ export function CheckoutApp() {
   });
 
   const buyMutation = useMutation({
-    mutationFn: (vars: { productId: number; customer: { name: string; email: string; taxId: string; cellphone: string } }) =>
-      createOrder(vars.productId, vars.customer),
+    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string } }) =>
+      createOrder(vars.productId, vars.customer).then((r) => ({ ...r, product: vars.product })),
     onSuccess: (result) => {
       queryClient.setQueryData(["order", result.orderId], {
         id: result.orderId,
@@ -812,7 +816,7 @@ export function CheckoutApp() {
         pixExpiresAt: result.pixExpiresAt,
         createdAt: new Date().toISOString()
       });
-      navigate(`/order/${result.orderId}`, { pix: result });
+      navigate(`/order/${result.orderId}`, { pix: result, product: result.product });
     }
   });
 
@@ -836,7 +840,7 @@ export function CheckoutApp() {
         mutationError={buyMutation.error ? "Erro ao gerar PIX. Tente novamente." : undefined}
         onCancel={() => navigate("/")}
         onSubmit={(customer) => {
-          buyMutation.mutate({ productId: appState.product.id, customer });
+          buyMutation.mutate({ productId: appState.product.id, product: appState.product, customer });
         }}
       />
     );
@@ -845,9 +849,12 @@ export function CheckoutApp() {
   if (appState.page === "order") {
     return (
       <>
-        <ProductsPage
+        <PaymentPage
+          product={appState.product}
           session={session}
-          onSelectProduct={(product) => intentMutation.mutate(product.id)}
+          isPending={false}
+          onCancel={() => navigate("/")}
+          onSubmit={() => {}}
         />
         <OrderModal
           orderId={appState.orderId}
