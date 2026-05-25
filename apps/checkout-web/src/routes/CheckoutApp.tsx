@@ -742,6 +742,11 @@ function PaymentPage({
                 ))}
               </div>
 
+              {/* Imagem do produto */}
+              {product.imageUrl && (
+                <img src={product.imageUrl} alt={product.name} className="w-full h-36 object-cover rounded" />
+              )}
+
               {/* Divisor */}
               <div className="border-t border-border/40" />
 
