@@ -842,7 +842,7 @@ function ProductCard({ product, onBuy, isLoading }: { product: Product; onBuy: (
           <img src={product.imageUrl} alt={product.name} className="w-full h-36 object-cover rounded mb-4" />
         )}
         {product.discountPercent ? (
-          <div className="flex items-baseline gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <p className="text-3xl font-display font-bold text-primary">
               {formatCurrency(Math.round(product.amountCents * (1 - product.discountPercent / 100)))}
             </p>
