@@ -6,6 +6,7 @@ import Fastify from "fastify";
 import type { CheckoutApiEnv } from "./config/env";
 import { checkDependencies, type DependencyPingers } from "./infra/dependencies";
 import type { AbacatePayClient } from "./modules/checkout/abacate-pay-client";
+import type { CouponRepository } from "./modules/checkout/coupon-repository";
 import type { CustomerRepository } from "./modules/checkout/customer-repository";
 import type { PayIntentStore } from "./modules/checkout/pay-intent-store";
 import { registerCheckoutRoutes } from "./modules/checkout/routes";
@@ -23,13 +24,14 @@ export type CheckoutApiServerOptions = {
   orders?: OrderRepository;
   customers?: CustomerRepository;
   products?: ProductRepository;
+  coupons?: CouponRepository;
   abacatePay?: AbacatePayClient;
   pixStore?: PixStore;
   payIntentStore?: PayIntentStore;
 };
 
 export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) {
-  const { env, dependencies, orders, customers, products, abacatePay, pixStore, payIntentStore } = options;
+  const { env, dependencies, orders, customers, products, coupons, abacatePay, pixStore, payIntentStore } = options;
 
   const server = Fastify({
     logger: env?.NODE_ENV === "production"
@@ -90,6 +92,7 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
           orders,
           customers,
           products,
+          coupons,
           abacatePay,
           pixStore,
           payIntentStore

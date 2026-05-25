@@ -3,6 +3,7 @@ import { z } from "zod";
 import { verifySessionToken } from "../../auth/verify-session-token";
 import type { CheckoutApiEnv } from "../../config/env";
 import type { AbacatePayClient } from "./abacate-pay-client";
+import type { CouponRepository } from "./coupon-repository";
 import type { CustomerRepository } from "./customer-repository";
 import type { OrderRepository } from "./order-repository";
 import type { PayIntentStore } from "./pay-intent-store";
@@ -13,6 +14,7 @@ const createOrderBodySchema = z.object({
   productId: z.number().int().positive(),
   method: z.enum(["pix", "card"]).default("pix"),
   saveInfo: z.boolean().default(true),
+  couponCode: z.string().trim().optional(),
   customer: z.object({
     name: z.string().trim().min(2).max(100),
     email: z.string().email(),
@@ -21,12 +23,20 @@ const createOrderBodySchema = z.object({
   }).optional(),
 });
 
+function applyDiscounts(baseCents: number, productDiscountPercent: number | null, couponPercent: number | null): number {
+  let amount = baseCents;
+  if (productDiscountPercent) amount = Math.round(amount * (1 - productDiscountPercent / 100));
+  if (couponPercent) amount = Math.round(amount * (1 - couponPercent / 100));
+  return Math.max(amount, 0);
+}
+
 export function registerCheckoutRoutes(
   server: FastifyInstance,
   env: Pick<CheckoutApiEnv, "JWT_SECRET" | "AUTH_COOKIE_NAME" | "CHECKOUT_WEB_URL">,
   orders: OrderRepository,
   customers: CustomerRepository,
   products: ProductRepository,
+  coupons: CouponRepository | undefined,
   abacatePay: AbacatePayClient,
   pixStore: PixStore,
   payIntentStore: PayIntentStore
@@ -34,6 +44,25 @@ export function registerCheckoutRoutes(
   server.get("/products", async () => {
     const list = await products.listActive();
     return { products: list };
+  });
+
+  server.get("/coupon/validate", async (request, reply) => {
+    const token = request.cookies[env.AUTH_COOKIE_NAME];
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    const session = await verifySessionToken(token, env);
+    if (!session) return reply.code(401).send({ error: "unauthorized" });
+
+    const { code } = request.query as { code?: string };
+    if (!code?.trim()) return reply.code(400).send({ error: "missing_code" });
+
+    if (!coupons) return reply.code(404).send({ valid: false, message: "Cupom inválido." });
+
+    const coupon = await coupons.findActiveByCode(code.trim());
+    if (!coupon) {
+      return reply.code(404).send({ valid: false, message: "Cupom inválido ou expirado." });
+    }
+
+    return { valid: true, discountPercent: coupon.discount_percent, code: coupon.code };
   });
 
   server.get("/customer/me", async (request, reply) => {
@@ -100,13 +129,32 @@ export function registerCheckoutRoutes(
       return reply.code(404).send({ error: "product_not_found" });
     }
 
+    let couponRow = null;
+    if (parsed.data.couponCode && coupons) {
+      couponRow = await coupons.findActiveByCode(parsed.data.couponCode);
+      if (!couponRow) {
+        return reply.code(400).send({ error: "invalid_coupon", message: "Cupom inválido ou expirado." });
+      }
+    }
+
+    const couponPercent = couponRow?.discount_percent ?? null;
+    const finalAmountCents = applyDiscounts(product.amountCents, product.discountPercent, couponPercent);
+    const discountCents = product.amountCents - finalAmountCents;
+
     const order = await orders.create({
       userId: session.userId,
       productId: String(product.id),
       description: product.name,
-      amountCents: product.amountCents,
+      amountCents: finalAmountCents,
+      originalAmountCents: product.amountCents,
+      couponCode: couponRow?.code ?? null,
+      discountCents: discountCents > 0 ? discountCents : null,
       paymentMethod: parsed.data.method
     });
+
+    if (couponRow && coupons) {
+      await coupons.incrementUsage(couponRow.id);
+    }
 
     const customer = parsed.data.customer
       ? {
@@ -136,7 +184,7 @@ export function registerCheckoutRoutes(
           name: product.name,
           description: product.name,
           quantity: 1,
-          price: product.amountCents
+          price: finalAmountCents
         }],
         completionUrl: env.CHECKOUT_WEB_URL ? `${env.CHECKOUT_WEB_URL}/order/${order.id}` : undefined,
         returnUrl: env.CHECKOUT_WEB_URL ?? undefined,
@@ -160,14 +208,14 @@ export function registerCheckoutRoutes(
 
       return reply.code(201).send({
         orderId: order.id,
-        amountCents: product.amountCents,
+        amountCents: finalAmountCents,
         status: "pending",
         checkoutUrl: billing.checkoutUrl
       });
     }
 
     const pix = await abacatePay.createTransparentPix({
-      amountCents: product.amountCents,
+      amountCents: finalAmountCents,
       description: product.name,
       customer
     });
@@ -193,7 +241,7 @@ export function registerCheckoutRoutes(
 
     return reply.code(201).send({
       orderId: order.id,
-      amountCents: product.amountCents,
+      amountCents: finalAmountCents,
       status: "pending",
       pixCode: pix.brCode,
       pixCodeBase64: pix.brCodeBase64,

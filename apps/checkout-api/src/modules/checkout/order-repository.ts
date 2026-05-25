@@ -54,12 +54,21 @@ export function createOrderRepository(client: PostgresClient) {
     productId: string;
     description: string;
     amountCents: number;
+    originalAmountCents?: number | null;
+    couponCode?: string | null;
+    discountCents?: number | null;
     paymentMethod?: "pix" | "card";
   }): Promise<Order> {
     const method = input.paymentMethod ?? "pix";
     const [row] = await client<OrderRow[]>`
-      insert into checkout_orders (user_id, product_id, description, amount_cents, status, payment_method)
-      values (${input.userId}, ${input.productId}, ${input.description}, ${input.amountCents}, 'pending', ${method})
+      insert into checkout_orders (
+        user_id, product_id, description, amount_cents, status, payment_method,
+        original_amount_cents, coupon_code, discount_cents
+      )
+      values (
+        ${input.userId}, ${input.productId}, ${input.description}, ${input.amountCents}, 'pending', ${method},
+        ${input.originalAmountCents ?? null}, ${input.couponCode ?? null}, ${input.discountCents ?? null}
+      )
       returning *
     `;
 

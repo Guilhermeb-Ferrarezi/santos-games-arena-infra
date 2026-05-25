@@ -11,6 +11,9 @@ export type Product = {
   description: string;
   features: string[];
   amountCents: number;
+  discountPercent: number | null;
+  imageKey: string | null;
+  imageUrl: string | null;
 };
 
 export type Order = {
@@ -67,23 +70,31 @@ export async function listProducts(): Promise<Product[]> {
 export async function createOrder(
   productId: number,
   customer?: { name: string; email: string; taxId: string; cellphone: string },
-  saveInfo?: boolean
+  saveInfo?: boolean,
+  couponCode?: string
 ): Promise<CreateOrderResult> {
-  const { data } = await checkoutApi.post<CreateOrderResult>("/order", { productId, customer, saveInfo });
+  const { data } = await checkoutApi.post<CreateOrderResult>("/order", { productId, customer, saveInfo, couponCode: couponCode || undefined });
   return data;
 }
 
 export async function createCardOrder(
   productId: number,
   customer: { name: string; email: string; taxId: string; cellphone: string },
-  saveInfo?: boolean
+  saveInfo?: boolean,
+  couponCode?: string
 ): Promise<CreateCardOrderResult> {
   const { data } = await checkoutApi.post<CreateCardOrderResult>("/order", {
     productId,
     method: "card",
     customer,
-    saveInfo
+    saveInfo,
+    couponCode: couponCode || undefined
   });
+  return data;
+}
+
+export async function validateCoupon(code: string): Promise<{ valid: boolean; discountPercent: number; code: string }> {
+  const { data } = await checkoutApi.get<{ valid: boolean; discountPercent: number; code: string }>(`/coupon/validate?code=${encodeURIComponent(code)}`);
   return data;
 }
 

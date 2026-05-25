@@ -12,6 +12,7 @@ import {
   getPayIntent,
   getSession,
   listProducts,
+  validateCoupon,
   type CreateOrderResult,
   type CustomerInfo,
   type Order,
@@ -402,6 +403,7 @@ function PaymentPage({
     name: string; email: string; taxId: string; cellphone: string;
     method: "pix" | "card";
     saveInfo: boolean;
+    couponCode?: string;
   }) => void;
   isPending: boolean;
   mutationError?: string;
@@ -420,6 +422,38 @@ function PaymentPage({
       : ""
   );
   const [saveInfo, setSaveInfo] = useState(!savedCustomer);
+
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  async function handleApplyCoupon() {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) return;
+    setCouponLoading(true);
+    setCouponError(null);
+    try {
+      const result = await validateCoupon(code);
+      setAppliedCoupon({ code: result.code, discountPercent: result.discountPercent });
+      setCouponInput("");
+    } catch {
+      setCouponError("Cupom inválido ou expirado.");
+      setAppliedCoupon(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
+  const productDiscount = product.discountPercent ?? 0;
+  const afterProductDiscount = productDiscount > 0
+    ? Math.round(product.amountCents * (1 - productDiscount / 100))
+    : product.amountCents;
+  const couponDiscount = appliedCoupon?.discountPercent ?? 0;
+  const finalAmount = couponDiscount > 0
+    ? Math.round(afterProductDiscount * (1 - couponDiscount / 100))
+    : afterProductDiscount;
+  const totalSaved = product.amountCents - finalAmount;
 
   type FieldErrors = {
     name?: string; email?: string; taxId?: string; cellphone?: string;
@@ -482,7 +516,8 @@ function PaymentPage({
       taxId: taxId.replace(/\D/g, ""),
       cellphone: cellphone.replace(/\D/g, ""),
       method: paymentMethod,
-      saveInfo
+      saveInfo,
+      couponCode: appliedCoupon?.code
     });
   }
 
@@ -601,6 +636,45 @@ function PaymentPage({
                 </div>
               )}
 
+              {/* Cupom de desconto */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Cupom de desconto</span>
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between border border-green-600/40 bg-green-950/30 px-3 py-2 text-sm">
+                    <span className="text-green-400 font-mono font-semibold">{appliedCoupon.code} <span className="font-normal text-green-500">(-{appliedCoupon.discountPercent}%)</span></span>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-foreground underline"
+                      onClick={() => setAppliedCoupon(null)}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Código do cupom"
+                      value={couponInput}
+                      onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(null); }}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleApplyCoupon())}
+                      className={inputCls + " flex-1"}
+                      disabled={isPending || couponLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleApplyCoupon}
+                      disabled={!couponInput.trim() || couponLoading || isPending}
+                    >
+                      {couponLoading ? <Spinner /> : "Aplicar"}
+                    </Button>
+                  </div>
+                )}
+                {couponError && <p className="text-xs text-destructive">{couponError}</p>}
+              </div>
+
               <label className="flex items-center gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -675,12 +749,20 @@ function PaymentPage({
               <div className="flex flex-col gap-2 text-sm">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span>
-                  <span>{formatCurrency(product.amountCents)}</span>
+                  <span className={totalSaved > 0 ? "line-through opacity-60" : ""}>{formatCurrency(product.amountCents)}</span>
                 </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Taxa (0%)</span>
-                  <span>R$ 0,00</span>
-                </div>
+                {productDiscount > 0 && (
+                  <div className="flex justify-between text-green-500 text-xs">
+                    <span>Desconto produto ({productDiscount}%)</span>
+                    <span>-{formatCurrency(product.amountCents - afterProductDiscount)}</span>
+                  </div>
+                )}
+                {appliedCoupon && (
+                  <div className="flex justify-between text-green-500 text-xs">
+                    <span>Cupom {appliedCoupon.code} ({appliedCoupon.discountPercent}%)</span>
+                    <span>-{formatCurrency(afterProductDiscount - finalAmount)}</span>
+                  </div>
+                )}
               </div>
 
               {/* Divisor */}
@@ -690,7 +772,7 @@ function PaymentPage({
               <div className="flex justify-between font-semibold">
                 <span>Total hoje</span>
                 <span className="text-primary text-lg font-display font-bold">
-                  {formatCurrency(product.amountCents)}
+                  {formatCurrency(finalAmount)}
                 </span>
               </div>
 
@@ -740,14 +822,42 @@ function IntentLoader({
 // ── Products page ─────────────────────────────────────────────────────────────
 
 function ProductCard({ product, onBuy, isLoading }: { product: Product; onBuy: () => void; isLoading?: boolean }) {
+  const features = product.features?.length > 0
+    ? product.features
+    : [product.description].filter(Boolean);
+
   return (
     <div className="flex flex-col border border-border/60 bg-surface-1 overflow-hidden transition-all hover:border-primary/40">
       <div className="flex-1 p-6">
         <h3 className="text-xl font-display font-bold mb-1">{product.name}</h3>
-        <p className="text-sm text-muted-foreground mb-4">{product.description}</p>
-        <p className="text-3xl font-display font-bold text-primary">
-          {formatCurrency(product.amountCents)}
-        </p>
+        <div className="flex flex-col gap-1 mb-4">
+          {features.map((f, i) => (
+            <div key={i} className="flex items-start gap-2 py-0.5">
+              <span className="mt-0.5 text-[#32BCAD] text-xs">✓</span>
+              <span className="text-sm text-muted-foreground">{f}</span>
+            </div>
+          ))}
+        </div>
+        {product.imageUrl && (
+          <img src={product.imageUrl} alt={product.name} className="w-full h-36 object-cover rounded mb-4" />
+        )}
+        {product.discountPercent ? (
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-display font-bold text-primary">
+              {formatCurrency(Math.round(product.amountCents * (1 - product.discountPercent / 100)))}
+            </p>
+            <p className="text-base text-muted-foreground line-through">
+              {formatCurrency(product.amountCents)}
+            </p>
+            <span className="text-xs font-semibold bg-green-600/20 text-green-400 px-1.5 py-0.5 rounded">
+              -{product.discountPercent}%
+            </span>
+          </div>
+        ) : (
+          <p className="text-3xl font-display font-bold text-primary">
+            {formatCurrency(product.amountCents)}
+          </p>
+        )}
       </div>
       <div className="border-t border-border/40 px-6 pb-6 pt-4">
         <Button className="w-full gap-2" size="lg" onClick={onBuy} disabled={isLoading}>
@@ -875,8 +985,8 @@ export function CheckoutApp() {
   });
 
   const buyMutation = useMutation({
-    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; saveInfo: boolean }) =>
-      createOrder(vars.productId, vars.customer, vars.saveInfo).then((r) => ({ ...r, product: vars.product })),
+    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; saveInfo: boolean; couponCode?: string }) =>
+      createOrder(vars.productId, vars.customer, vars.saveInfo, vars.couponCode).then((r) => ({ ...r, product: vars.product })),
     onSuccess: (result) => {
       queryClient.setQueryData(["order", result.orderId], {
         id: result.orderId,
@@ -897,8 +1007,8 @@ export function CheckoutApp() {
   });
 
   const cardMutation = useMutation({
-    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; saveInfo: boolean }) =>
-      createCardOrder(vars.productId, vars.customer, vars.saveInfo),
+    mutationFn: (vars: { productId: number; product: Product; customer: { name: string; email: string; taxId: string; cellphone: string }; saveInfo: boolean; couponCode?: string }) =>
+      createCardOrder(vars.productId, vars.customer, vars.saveInfo, vars.couponCode),
     onSuccess: (result) => {
       window.location.href = result.checkoutUrl;
     }
@@ -938,14 +1048,16 @@ export function CheckoutApp() {
               productId: appState.product.id,
               product: appState.product,
               customer: { name: data.name, email: data.email, taxId: data.taxId, cellphone: data.cellphone },
-              saveInfo: data.saveInfo
+              saveInfo: data.saveInfo,
+              couponCode: data.couponCode
             });
           } else {
             buyMutation.mutate({
               productId: appState.product.id,
               product: appState.product,
               customer: { name: data.name, email: data.email, taxId: data.taxId, cellphone: data.cellphone },
-              saveInfo: data.saveInfo
+              saveInfo: data.saveInfo,
+              couponCode: data.couponCode
             });
           }
         }}

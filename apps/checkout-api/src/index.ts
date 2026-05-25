@@ -4,6 +4,7 @@ import { createRedisClient, pingRedis } from "@santos-games/redis";
 import { parseCheckoutApiEnv } from "./config/env";
 import { runMigrations } from "./migrations";
 import { createAbacatePayClient } from "./modules/checkout/abacate-pay-client";
+import { createCouponRepository } from "./modules/checkout/coupon-repository";
 import { createCustomerRepository } from "./modules/checkout/customer-repository";
 import { createOrderRepository } from "./modules/checkout/order-repository";
 import { createPayIntentStore } from "./modules/checkout/pay-intent-store";
@@ -18,6 +19,7 @@ const redis = createRedisClient({ REDIS_URL: env.REDIS_URL });
 const orders = createOrderRepository(postgresHome);
 const customers = createCustomerRepository(postgresHome);
 const products = createProductRepository(postgresHome);
+const coupons = createCouponRepository(postgresHome);
 const abacatePay = createAbacatePayClient(env);
 const pixStore = createPixStore(redis);
 const payIntentStore = createPayIntentStore(redis);
@@ -29,6 +31,7 @@ const server = createCheckoutApiServer({
   orders,
   customers,
   products,
+  coupons,
   abacatePay,
   pixStore,
   payIntentStore,
