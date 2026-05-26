@@ -183,7 +183,9 @@ export function registerCheckoutRoutes(
         await customers.saveInfo(session.userId, {
           name: parsed.data.customer.name,
           taxId: parsed.data.customer.taxId.replace(/\D/g, ""),
-          cellphone: parsed.data.customer.cellphone
+          cellphone: parsed.data.customer.cellphone,
+          email: session.email,
+          login: session.login
         });
       }
 
@@ -205,7 +207,9 @@ export function registerCheckoutRoutes(
       await customers.saveInfo(session.userId, {
         name: parsed.data.customer.name,
         taxId: parsed.data.customer.taxId.replace(/\D/g, ""),
-        cellphone: parsed.data.customer.cellphone
+        cellphone: parsed.data.customer.cellphone,
+        email: session.email,
+        login: session.login
       });
     }
 

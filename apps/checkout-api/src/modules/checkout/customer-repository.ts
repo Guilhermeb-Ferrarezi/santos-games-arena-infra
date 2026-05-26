@@ -64,15 +64,17 @@ export function createCustomerRepository(client: PostgresClient) {
 
   async function saveInfo(
     userId: number,
-    info: { name: string; taxId: string; cellphone: string }
+    info: { name: string; taxId: string; cellphone: string; email?: string; login?: string }
   ): Promise<void> {
     await client`
-      insert into checkout_customers (user_id, provider_customer_id, name, tax_id, cellphone)
-      values (${userId}, '', ${info.name}, ${info.taxId}, ${info.cellphone})
+      insert into checkout_customers (user_id, provider_customer_id, name, tax_id, cellphone, user_email, user_login)
+      values (${userId}, '', ${info.name}, ${info.taxId}, ${info.cellphone}, ${info.email ?? null}, ${info.login ?? null})
       on conflict (user_id) do update set
         name = ${info.name},
         tax_id = ${info.taxId},
-        cellphone = ${info.cellphone}
+        cellphone = ${info.cellphone},
+        user_email = coalesce(${info.email ?? null}, checkout_customers.user_email),
+        user_login = coalesce(${info.login ?? null}, checkout_customers.user_login)
     `;
   }
 
