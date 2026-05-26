@@ -61,4 +61,17 @@ export async function runMigrations(client: PostgresClient): Promise<void> {
     RENAME COLUMN abacate_customer_id TO provider_customer_id
   `.catch(() => {});
 
+  // user_id references the legacy sga_db "User" table which lives in a different
+  // database — cross-database FK enforcement is impossible, so we drop it here.
+  // JWT verification already ensures the userId is valid before any insert.
+  await client`
+    ALTER TABLE checkout_orders
+    DROP CONSTRAINT IF EXISTS checkout_orders_user_id_fkey
+  `.catch(() => {});
+
+  await client`
+    ALTER TABLE checkout_customers
+    DROP CONSTRAINT IF EXISTS checkout_customers_user_id_fkey
+  `.catch(() => {});
+
 }
