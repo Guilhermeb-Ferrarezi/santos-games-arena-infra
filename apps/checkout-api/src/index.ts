@@ -10,9 +10,11 @@ import { createOrderRepository } from "./modules/checkout/order-repository";
 import { createPayIntentStore } from "./modules/checkout/pay-intent-store";
 import { createPixStore } from "./modules/checkout/pix-store";
 import { createProductRepository } from "./modules/checkout/product-repository";
+import { initResend } from "./modules/email/send-payment-confirmation";
 import { createCheckoutApiServer } from "./server";
 
 const env = parseCheckoutApiEnv();
+initResend(env);
 const postgresLegacy = createPostgresClient({ DATABASE_URL: env.DATABASE_URL });
 const postgresHome = createPostgresClient({ DATABASE_URL: env.DATABASE_HOME });
 const redis = createRedisClient({ REDIS_URL: env.REDIS_URL });

@@ -16,6 +16,7 @@ export type CustomerInfo = {
   name: string | null;
   taxId: string | null;
   cellphone: string | null;
+  email: string | null;
 };
 
 export type CustomerRepository = ReturnType<typeof createCustomerRepository>;
@@ -33,7 +34,7 @@ export function createCustomerRepository(client: PostgresClient) {
 
   async function getInfo(userId: number): Promise<CustomerInfo | null> {
     const [row] = await client<CustomerRow[]>`
-      select name, tax_id, cellphone from checkout_customers
+      select name, tax_id, cellphone, user_email from checkout_customers
       where user_id = ${userId}
       limit 1
     `;
@@ -42,7 +43,8 @@ export function createCustomerRepository(client: PostgresClient) {
     return {
       name: row.name ?? null,
       taxId: row.tax_id ?? null,
-      cellphone: row.cellphone ?? null
+      cellphone: row.cellphone ?? null,
+      email: row.user_email ?? null
     };
   }
 

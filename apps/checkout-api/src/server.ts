@@ -102,7 +102,7 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
     );
   }
 
-  if (orders && env?.DOTFY_WEBHOOK_SECRET) {
+  if (orders && customers && env?.DOTFY_WEBHOOK_SECRET) {
     server.register(
       async (webhookServer) => {
         registerWebhookRoutes(
@@ -111,9 +111,11 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
             DOTFY_WEBHOOK_SECRET: env.DOTFY_WEBHOOK_SECRET!,
             CORUJAO_API_URL: env.CORUJAO_API_URL,
             CORUJAO_INTERNAL_SECRET: env.CORUJAO_INTERNAL_SECRET,
-            CORUJAO_PRODUCT_IDS: env.CORUJAO_PRODUCT_IDS
+            CORUJAO_PRODUCT_IDS: env.CORUJAO_PRODUCT_IDS,
+            RESEND_FROM: env.RESEND_FROM
           },
-          orders
+          orders,
+          customers
         );
       },
       { prefix: CHECKOUT_PREFIX }

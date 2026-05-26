@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { CheckoutApiEnv } from "../../config/env";
+import type { CustomerRepository } from "../checkout/customer-repository";
 import type { OrderRepository } from "../checkout/order-repository";
+import { sendPaymentConfirmation } from "../email/send-payment-confirmation";
 
 function verifyDotfySignature(rawBody: Buffer, signatureHeader: string, secret: string): boolean {
   const parts = Object.fromEntries(
@@ -47,8 +49,9 @@ async function notifyCorujao(
 
 export function registerWebhookRoutes(
   server: FastifyInstance,
-  env: Pick<CheckoutApiEnv, "DOTFY_WEBHOOK_SECRET" | "CORUJAO_API_URL" | "CORUJAO_INTERNAL_SECRET" | "CORUJAO_PRODUCT_IDS">,
-  orders: OrderRepository
+  env: Pick<CheckoutApiEnv, "DOTFY_WEBHOOK_SECRET" | "CORUJAO_API_URL" | "CORUJAO_INTERNAL_SECRET" | "CORUJAO_PRODUCT_IDS" | "RESEND_FROM">,
+  orders: OrderRepository,
+  customers: CustomerRepository
 ) {
   const corujaoProductIds = new Set(
     (env.CORUJAO_PRODUCT_IDS ?? []).map((id) => id.trim()).filter(Boolean)
@@ -96,9 +99,20 @@ export function registerWebhookRoutes(
       if (eventName === "EVENT:CHARGE_PAID" || rawStatus === "PAID") {
         await orders.updateStatus(chargeId, "paid");
 
-        if (corujaoProductIds.size > 0) {
-          const order = await orders.findByChargeId(chargeId);
-          if (order && corujaoProductIds.has(order.productId)) {
+        const order = await orders.findByChargeId(chargeId);
+        if (order) {
+          const customerInfo = await customers.getInfo(order.userId);
+          const customerEmail = customerInfo?.email ?? null;
+
+          if (customerEmail) {
+            sendPaymentConfirmation(env, customerEmail, {
+              id: order.id,
+              description: order.description,
+              amountCents: order.amountCents
+            }).catch(() => {});
+          }
+
+          if (corujaoProductIds.size > 0 && corujaoProductIds.has(order.productId)) {
             await notifyCorujao(env, {
               orderId: order.id,
               userId: order.userId,

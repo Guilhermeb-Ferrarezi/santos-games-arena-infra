@@ -17,6 +17,7 @@
     "@santos-games/redis": "workspace:*",
     "fastify": "^5.6.2",
     "postgres": "^3.4.7",
+    "resend": "^6.12.4",
     "zod": "^4.1.12"
   },
   "devDependencies": {
