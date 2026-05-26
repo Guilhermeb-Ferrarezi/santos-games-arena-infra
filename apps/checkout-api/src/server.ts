@@ -5,7 +5,7 @@ import Fastify from "fastify";
 
 import type { CheckoutApiEnv } from "./config/env";
 import { checkDependencies, type DependencyPingers } from "./infra/dependencies";
-import type { AbacatePayClient } from "./modules/checkout/abacate-pay-client";
+import type { DotfyClient } from "./modules/checkout/dotfy-client";
 import type { CouponRepository } from "./modules/checkout/coupon-repository";
 import type { CustomerRepository } from "./modules/checkout/customer-repository";
 import type { PayIntentStore } from "./modules/checkout/pay-intent-store";
@@ -25,13 +25,13 @@ export type CheckoutApiServerOptions = {
   customers?: CustomerRepository;
   products?: ProductRepository;
   coupons?: CouponRepository;
-  abacatePay?: AbacatePayClient;
+  dotfy?: DotfyClient;
   pixStore?: PixStore;
   payIntentStore?: PayIntentStore;
 };
 
 export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) {
-  const { env, dependencies, orders, customers, products, coupons, abacatePay, pixStore, payIntentStore } = options;
+  const { env, dependencies, orders, customers, products, coupons, dotfy, pixStore, payIntentStore } = options;
 
   const server = Fastify({
     logger: env?.NODE_ENV === "production"
@@ -79,7 +79,7 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
     });
   }
 
-  if (orders && customers && products && abacatePay && pixStore && payIntentStore && env?.JWT_SECRET && env.AUTH_COOKIE_NAME) {
+  if (orders && customers && products && dotfy && pixStore && payIntentStore && env?.JWT_SECRET && env.AUTH_COOKIE_NAME) {
     server.register(
       async (checkoutServer) => {
         registerCheckoutRoutes(
@@ -93,7 +93,7 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
           customers,
           products,
           coupons,
-          abacatePay,
+          dotfy,
           pixStore,
           payIntentStore
         );
@@ -102,12 +102,12 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
     );
   }
 
-  if (orders && env?.ABACATE_PAY_WEBHOOK_SECRET) {
+  if (orders && env?.DOTFY_WEBHOOK_SECRET) {
     server.register(
       async (webhookServer) => {
         registerWebhookRoutes(
           webhookServer,
-          { ABACATE_PAY_WEBHOOK_SECRET: env.ABACATE_PAY_WEBHOOK_SECRET! },
+          { DOTFY_WEBHOOK_SECRET: env.DOTFY_WEBHOOK_SECRET! },
           orders
         );
       },

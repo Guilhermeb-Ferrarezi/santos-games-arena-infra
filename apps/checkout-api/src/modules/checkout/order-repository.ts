@@ -9,7 +9,7 @@ export type Order = {
   description: string;
   amountCents: number;
   status: OrderStatus;
-  abacateBillingId: string | null;
+  chargeId: string | null;
   checkoutUrl: string | null;
   paymentMethod: "pix" | "card";
   createdAt: string;
@@ -23,7 +23,7 @@ type OrderRow = {
   description: string;
   amount_cents: number;
   status: OrderStatus;
-  abacate_billing_id: string | null;
+  charge_id: string | null;
   checkout_url: string | null;
   payment_method: "pix" | "card";
   created_at: string;
@@ -38,7 +38,7 @@ function toOrder(row: OrderRow): Order {
     description: row.description,
     amountCents: row.amount_cents,
     status: row.status,
-    abacateBillingId: row.abacate_billing_id,
+    chargeId: row.charge_id,
     checkoutUrl: row.checkout_url,
     paymentMethod: row.payment_method ?? "pix",
     createdAt: row.created_at,
@@ -75,22 +75,22 @@ export function createOrderRepository(client: PostgresClient) {
     return toOrder(row);
   }
 
-  async function updateBilling(id: number, billingId: string, checkoutUrl: string | null): Promise<void> {
+  async function updateCharge(id: number, chargeId: string, checkoutUrl: string | null): Promise<void> {
     await client`
       update checkout_orders
-      set abacate_billing_id = ${billingId},
+      set charge_id = ${chargeId},
           checkout_url = ${checkoutUrl},
           updated_at = now()
       where id = ${id}
     `;
   }
 
-  async function updateStatus(abacateBillingId: string, status: OrderStatus): Promise<void> {
+  async function updateStatus(chargeId: string, status: OrderStatus): Promise<void> {
     await client`
       update checkout_orders
       set status = ${status},
           updated_at = now()
-      where abacate_billing_id = ${abacateBillingId}
+      where charge_id = ${chargeId}
     `;
   }
 
@@ -104,10 +104,10 @@ export function createOrderRepository(client: PostgresClient) {
     return row ? toOrder(row) : null;
   }
 
-  async function findByBillingId(abacateBillingId: string): Promise<Order | null> {
+  async function findByChargeId(chargeId: string): Promise<Order | null> {
     const [row] = await client<OrderRow[]>`
       select * from checkout_orders
-      where abacate_billing_id = ${abacateBillingId}
+      where charge_id = ${chargeId}
       limit 1
     `;
 
@@ -132,5 +132,5 @@ export function createOrderRepository(client: PostgresClient) {
     `;
   }
 
-  return { create, updateBilling, updateStatus, findById, findByBillingId, cancelById, failById };
+  return { create, updateCharge, updateStatus, findById, findByChargeId, cancelById, failById };
 }

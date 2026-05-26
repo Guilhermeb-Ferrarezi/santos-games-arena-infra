@@ -51,4 +51,14 @@ export async function runMigrations(client: PostgresClient): Promise<void> {
     )
   `;
 
+  await client`
+    ALTER TABLE checkout_orders
+    RENAME COLUMN abacate_billing_id TO charge_id
+  `.catch(() => {});
+
+  await client`
+    ALTER TABLE checkout_customers
+    RENAME COLUMN abacate_customer_id TO provider_customer_id
+  `.catch(() => {});
+
 }

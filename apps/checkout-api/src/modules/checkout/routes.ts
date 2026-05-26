@@ -2,9 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { verifySessionToken } from "../../auth/verify-session-token";
 import type { CheckoutApiEnv } from "../../config/env";
-import type { AbacatePayClient } from "./abacate-pay-client";
 import type { CouponRepository } from "./coupon-repository";
 import type { CustomerRepository } from "./customer-repository";
+import type { DotfyClient } from "./dotfy-client";
 import type { OrderRepository } from "./order-repository";
 import type { PayIntentStore } from "./pay-intent-store";
 import type { PixStore } from "./pix-store";
@@ -37,7 +37,7 @@ export function registerCheckoutRoutes(
   customers: CustomerRepository,
   products: ProductRepository,
   coupons: CouponRepository | undefined,
-  abacatePay: AbacatePayClient,
+  dotfy: DotfyClient,
   pixStore: PixStore,
   payIntentStore: PayIntentStore
 ) {
@@ -161,48 +161,29 @@ export function registerCheckoutRoutes(
           name: parsed.data.customer.name,
           email: parsed.data.customer.email,
           taxId: parsed.data.customer.taxId.replace(/\D/g, ""),
-          cellphone: parsed.data.customer.cellphone
+          phone: parsed.data.customer.cellphone
         }
       : undefined;
 
+    const charge = await dotfy.createCharge({
+      amountCents: finalAmountCents,
+      description: product.name,
+      customer
+    });
+
+    if (!charge.ok) {
+      await orders.failById(order.id);
+      return reply.code(502).send({ error: "charge_failed", message: charge.error });
+    }
+
+    await orders.updateCharge(order.id, charge.chargeId, charge.paymentLink);
+
     if (parsed.data.method === "card") {
-      let customerId: string | undefined;
-      if (customer) {
-        const customerResult = await abacatePay.createCustomer({
-          name: customer.name,
-          email: customer.email,
-          taxId: customer.taxId,
-          cellphone: customer.cellphone
-        });
-        if (customerResult.ok) customerId = customerResult.customerId;
-      }
-
-      const billing = await abacatePay.createBilling({
-        customerId,
-        products: [{
-          externalId: String(product.id),
-          name: product.name,
-          description: product.name,
-          quantity: 1,
-          price: finalAmountCents
-        }],
-        completionUrl: env.CHECKOUT_WEB_URL ? `${env.CHECKOUT_WEB_URL}/order/${order.id}` : undefined,
-        returnUrl: env.CHECKOUT_WEB_URL ?? undefined,
-        methods: ["CARD"]
-      });
-
-      if (!billing.ok) {
-        await orders.failById(order.id);
-        return reply.code(502).send({ error: "billing_error", message: billing.error });
-      }
-
-      await orders.updateBilling(order.id, billing.billingId, null);
-
-      if (customer && parsed.data.saveInfo) {
+      if (parsed.data.customer && parsed.data.saveInfo) {
         await customers.saveInfo(session.userId, {
-          name: customer.name,
-          taxId: customer.taxId,
-          cellphone: customer.cellphone
+          name: parsed.data.customer.name,
+          taxId: parsed.data.customer.taxId.replace(/\D/g, ""),
+          cellphone: parsed.data.customer.cellphone
         });
       }
 
@@ -210,32 +191,21 @@ export function registerCheckoutRoutes(
         orderId: order.id,
         amountCents: finalAmountCents,
         status: "pending",
-        checkoutUrl: billing.checkoutUrl
+        checkoutUrl: charge.paymentLink
       });
     }
 
-    const pix = await abacatePay.createTransparentPix({
-      amountCents: finalAmountCents,
-      description: product.name,
-      customer
-    });
-
-    if (!pix.ok) {
-      return reply.code(502).send({ error: "pix_failed", message: pix.error });
-    }
-
-    await orders.updateBilling(order.id, pix.pixId, null);
     await pixStore.save(order.id, {
-      brCode: pix.brCode,
-      brCodeBase64: pix.brCodeBase64,
-      expiresAt: pix.expiresAt
+      brCode: charge.qrCode,
+      brCodeBase64: charge.qrCodeImage,
+      expiresAt: charge.expiresAt
     });
 
-    if (customer && parsed.data.saveInfo) {
+    if (parsed.data.customer && parsed.data.saveInfo) {
       await customers.saveInfo(session.userId, {
-        name: customer.name,
-        taxId: customer.taxId,
-        cellphone: customer.cellphone
+        name: parsed.data.customer.name,
+        taxId: parsed.data.customer.taxId.replace(/\D/g, ""),
+        cellphone: parsed.data.customer.cellphone
       });
     }
 
@@ -243,9 +213,9 @@ export function registerCheckoutRoutes(
       orderId: order.id,
       amountCents: finalAmountCents,
       status: "pending",
-      pixCode: pix.brCode,
-      pixCodeBase64: pix.brCodeBase64,
-      pixExpiresAt: pix.expiresAt
+      pixCode: charge.qrCode,
+      pixCodeBase64: charge.qrCodeImage,
+      pixExpiresAt: charge.expiresAt
     });
   });
 

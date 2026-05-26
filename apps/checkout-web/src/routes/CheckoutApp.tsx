@@ -630,7 +630,7 @@ function PaymentPage({
                 <div className="flex items-start gap-3 border border-border/40 bg-surface-2 px-4 py-3 text-sm text-muted-foreground">
                   <CreditCardIcon size={16} />
                   <p className="leading-snug">
-                    Você será redirecionado para a página segura da AbacatePay para inserir os dados do cartão.
+                    Você será redirecionado para a página segura de pagamento para inserir os dados do cartão.
                     Seus dados pessoais acima serão enviados automaticamente.
                   </p>
                 </div>

@@ -3,25 +3,30 @@ import type { FastifyInstance } from "fastify";
 import type { CheckoutApiEnv } from "../../config/env";
 import type { OrderRepository } from "../checkout/order-repository";
 
-// Chave pública do Abacate Pay usada para assinar todos os webhooks
-const ABACATE_PAY_PUBLIC_KEY =
-  "t9dXRhHHo3yDEj5pVDYz0frf7q6bMKyMRmxxCPIPp3RCplBfXRxqlC6ZpiWmOqj4L63qEaeUOtrCI8P0VMUgo6iIga2ri9ogaHFs0WIIywSMg0q7RmBfybe1E5XJcfC4IW3alNqym0tXoAKkzvfEjZxV6bE0oG2zJrNNYmUCKZyV0KZ3JS8Votf9EAWWYdiDkMkpbMdPggfh1EqHlVkMiTady6jOR3hyzGEHrIz2Ret0xHKMbiqkr9HS1JhNHDX9";
+function verifyDotfySignature(rawBody: Buffer, signatureHeader: string, secret: string): boolean {
+  const parts = Object.fromEntries(
+    signatureHeader.split(",").map((p) => {
+      const [k, ...v] = p.split("=");
+      return [k, v.join("=")];
+    })
+  );
 
-function verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {
-  const expected = crypto
-    .createHmac("sha256", ABACATE_PAY_PUBLIC_KEY)
-    .update(rawBody)
-    .digest("base64");
+  const timestamp = parts.t;
+  const v1 = parts.v1;
+  if (!timestamp || !v1) return false;
+
+  const payload = `${timestamp}.${rawBody.toString()}`;
+  const expected = crypto.createHmac("sha256", secret).update(payload).digest("hex");
 
   const a = Buffer.from(expected);
-  const b = Buffer.from(signature);
+  const b = Buffer.from(v1);
 
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export function registerWebhookRoutes(
   server: FastifyInstance,
-  env: Pick<CheckoutApiEnv, "ABACATE_PAY_WEBHOOK_SECRET">,
+  env: Pick<CheckoutApiEnv, "DOTFY_WEBHOOK_SECRET">,
   orders: OrderRepository
 ) {
   server.addContentTypeParser("application/json", { parseAs: "buffer" }, (_req, body, done) => {
@@ -36,64 +41,40 @@ export function registerWebhookRoutes(
   server.post("/webhook", async (request, reply) => {
     const { raw, json } = request.body as { raw: Buffer; json: unknown };
 
-    // Verificar webhookSecret no query param (secret que registramos no Abacate Pay)
-    const { webhookSecret } = request.query as { webhookSecret?: string };
-    if (!webhookSecret) {
-      return reply.code(401).send({ error: "missing_secret" });
-    }
-    const secretA = Buffer.from(webhookSecret);
-    const secretB = Buffer.from(env.ABACATE_PAY_WEBHOOK_SECRET);
-    if (
-      secretA.length !== secretB.length ||
-      !crypto.timingSafeEqual(secretA, secretB)
-    ) {
-      return reply.code(401).send({ error: "invalid_secret" });
+    const signature = request.headers["x-webhook-signature"];
+    if (typeof signature !== "string" || !signature) {
+      return reply.code(401).send({ error: "missing_signature" });
     }
 
-    // Verificar assinatura HMAC com a chave pública do Abacate Pay
-    const signature = request.headers["x-webhook-signature"];
-    if (typeof signature === "string") {
-      const valid = verifyWebhookSignature(raw, signature);
-      if (!valid) {
-        return reply.code(401).send({ error: "invalid_signature" });
-      }
+    const valid = verifyDotfySignature(raw, signature, env.DOTFY_WEBHOOK_SECRET);
+    if (!valid) {
+      return reply.code(401).send({ error: "invalid_signature" });
     }
 
     const event = json as {
       event?: string;
+      timestamp?: string;
       data?: {
-        checkout?: { id?: string; status?: string };
-        pix?: { id?: string; status?: string };
-        transparent?: { id?: string; status?: string };
         id?: string;
+        externalId?: string | null;
         status?: string;
       };
     };
 
     const eventName = event?.event ?? "";
-    const billingId =
-      event?.data?.checkout?.id ??
-      event?.data?.pix?.id ??
-      event?.data?.transparent?.id ??
-      event?.data?.id;
-    const rawStatus =
-      event?.data?.checkout?.status ??
-      event?.data?.pix?.status ??
-      event?.data?.transparent?.status ??
-      event?.data?.status;
+    const chargeId = event?.data?.id;
+    const rawStatus = event?.data?.status;
 
-    console.log("[webhook] received event", eventName, billingId, rawStatus);
+    console.log("[webhook] received event", eventName, chargeId, rawStatus);
 
-    if (billingId && rawStatus) {
-      if (rawStatus === "PAID" || eventName === "transparent.completed") {
-        await orders.updateStatus(billingId, "paid");
-      } else if (rawStatus === "EXPIRED") {
-        await orders.updateStatus(billingId, "expired");
-      } else if (rawStatus === "FAILED" || rawStatus === "CANCELLED") {
-        await orders.updateStatus(billingId, "failed");
+    if (chargeId) {
+      if (eventName === "EVENT:CHARGE_PAID" || rawStatus === "PAID") {
+        await orders.updateStatus(chargeId, "paid");
+      } else if (eventName === "EVENT:CHARGE_EXPIRED" || rawStatus === "EXPIRED") {
+        await orders.updateStatus(chargeId, "expired");
       }
     }
 
-    return reply.code(200).send({ ok: true });
+    return reply.code(200).send({});
   });
 }
