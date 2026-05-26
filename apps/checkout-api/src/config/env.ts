@@ -23,7 +23,6 @@ const checkoutApiEnvSchema = z.object({
   RESEND_FROM: z.string().trim().min(1).default("Santos Games <noreply@santos-games.com>"),
   CORUJAO_API_URL: z.string().trim().url().optional(),
   CORUJAO_INTERNAL_SECRET: z.string().trim().min(1).optional(),
-  CORUJAO_PRODUCT_IDS: commaSeparatedList,
   LOGS_ROUTE_BLACKLIST: commaSeparatedList,
   LOGS_GET_ROUTE_BLACKLIST: commaSeparatedList
 });

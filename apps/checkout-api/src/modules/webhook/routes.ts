@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { CheckoutApiEnv } from "../../config/env";
 import type { CustomerRepository } from "../checkout/customer-repository";
 import type { OrderRepository } from "../checkout/order-repository";
+import type { ProductRepository } from "../checkout/product-repository";
 import { sendPaymentConfirmation } from "../email/send-payment-confirmation";
 
 function verifyDotfySignature(rawBody: Buffer, signatureHeader: string, secret: string): boolean {
@@ -49,13 +50,11 @@ async function notifyCorujao(
 
 export function registerWebhookRoutes(
   server: FastifyInstance,
-  env: Pick<CheckoutApiEnv, "DOTFY_WEBHOOK_SECRET" | "CORUJAO_API_URL" | "CORUJAO_INTERNAL_SECRET" | "CORUJAO_PRODUCT_IDS" | "RESEND_FROM">,
+  env: Pick<CheckoutApiEnv, "DOTFY_WEBHOOK_SECRET" | "CORUJAO_API_URL" | "CORUJAO_INTERNAL_SECRET" | "RESEND_FROM">,
   orders: OrderRepository,
-  customers: CustomerRepository
+  customers: CustomerRepository,
+  products: ProductRepository
 ) {
-  const corujaoProductIds = new Set(
-    (env.CORUJAO_PRODUCT_IDS ?? []).map((id) => id.trim()).filter(Boolean)
-  );
 
   server.addContentTypeParser("application/json", { parseAs: "buffer" }, (_req, body, done) => {
     try {
@@ -112,7 +111,7 @@ export function registerWebhookRoutes(
             }).catch(() => {});
           }
 
-          if (corujaoProductIds.size > 0 && corujaoProductIds.has(order.productId)) {
+          if (await products.isCorujao(order.productId)) {
             await notifyCorujao(env, {
               orderId: order.id,
               userId: order.userId,
