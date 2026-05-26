@@ -230,8 +230,18 @@ export function registerCheckoutRoutes(
     const orderId = parseInt(id, 10);
     if (isNaN(orderId)) return reply.code(400).send({ error: "invalid_id" });
 
+    const order = await orders.findById(orderId, session.userId);
+    if (!order || order.status !== "pending") return reply.code(404).send({ error: "not_found" });
+
     const cancelled = await orders.cancelById(orderId, session.userId);
     if (!cancelled) return reply.code(404).send({ error: "not_found" });
+
+    if (order.chargeId) {
+      const result = await dotfy.cancelCharge(order.chargeId);
+      if (!result.ok) {
+        console.warn("[checkout] dotfy charge cancel failed:", result.error);
+      }
+    }
 
     await pixStore.remove(orderId);
     return { ok: true };

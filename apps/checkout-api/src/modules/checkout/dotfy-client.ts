@@ -90,5 +90,29 @@ export function createDotfyClient(
     };
   }
 
-  return { createCharge };
+  async function cancelCharge(chargeId: string): Promise<{ ok: boolean; error?: string }> {
+    const res = await fetch(`${env.DOTFY_API_URL}/api/charges/${chargeId}`, {
+      method: "DELETE",
+      headers
+    });
+
+    console.log("[dotfy] cancel charge response", res.status);
+
+    if (res.ok) return { ok: true };
+
+    if (res.status === 404 || res.status === 405) {
+      const patchRes = await fetch(`${env.DOTFY_API_URL}/api/charges/${chargeId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ status: "EXPIRED" })
+      });
+
+      console.log("[dotfy] expire charge fallback response", patchRes.status);
+      if (patchRes.ok) return { ok: true };
+    }
+
+    return { ok: false, error: `HTTP ${res.status}` };
+  }
+
+  return { createCharge, cancelCharge };
 }
