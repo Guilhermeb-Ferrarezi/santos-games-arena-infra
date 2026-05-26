@@ -107,7 +107,12 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
       async (webhookServer) => {
         registerWebhookRoutes(
           webhookServer,
-          { DOTFY_WEBHOOK_SECRET: env.DOTFY_WEBHOOK_SECRET! },
+          {
+            DOTFY_WEBHOOK_SECRET: env.DOTFY_WEBHOOK_SECRET!,
+            CORUJAO_API_URL: env.CORUJAO_API_URL,
+            CORUJAO_INTERNAL_SECRET: env.CORUJAO_INTERNAL_SECRET,
+            CORUJAO_PRODUCT_IDS: env.CORUJAO_PRODUCT_IDS
+          },
           orders
         );
       },

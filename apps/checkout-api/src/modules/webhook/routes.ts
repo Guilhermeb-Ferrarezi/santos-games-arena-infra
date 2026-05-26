@@ -24,11 +24,36 @@ function verifyDotfySignature(rawBody: Buffer, signatureHeader: string, secret: 
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+async function notifyCorujao(
+  env: Pick<CheckoutApiEnv, "CORUJAO_API_URL" | "CORUJAO_INTERNAL_SECRET">,
+  body: { orderId: number; userId: number; amountCents: number }
+): Promise<void> {
+  if (!env.CORUJAO_API_URL || !env.CORUJAO_INTERNAL_SECRET) return;
+
+  try {
+    const res = await fetch(`${env.CORUJAO_API_URL}/api/corujao/public/vagas/descontar`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Secret": env.CORUJAO_INTERNAL_SECRET
+      },
+      body: JSON.stringify(body)
+    });
+    console.log("[webhook] corujao notify response", res.status);
+  } catch (err) {
+    console.warn("[webhook] corujao notify failed:", err);
+  }
+}
+
 export function registerWebhookRoutes(
   server: FastifyInstance,
-  env: Pick<CheckoutApiEnv, "DOTFY_WEBHOOK_SECRET">,
+  env: Pick<CheckoutApiEnv, "DOTFY_WEBHOOK_SECRET" | "CORUJAO_API_URL" | "CORUJAO_INTERNAL_SECRET" | "CORUJAO_PRODUCT_IDS">,
   orders: OrderRepository
 ) {
+  const corujaoProductIds = new Set(
+    (env.CORUJAO_PRODUCT_IDS ?? []).map((id) => id.trim()).filter(Boolean)
+  );
+
   server.addContentTypeParser("application/json", { parseAs: "buffer" }, (_req, body, done) => {
     try {
       const json = JSON.parse((body as Buffer).toString());
@@ -70,6 +95,17 @@ export function registerWebhookRoutes(
     if (chargeId) {
       if (eventName === "EVENT:CHARGE_PAID" || rawStatus === "PAID") {
         await orders.updateStatus(chargeId, "paid");
+
+        if (corujaoProductIds.size > 0) {
+          const order = await orders.findByChargeId(chargeId);
+          if (order && corujaoProductIds.has(order.productId)) {
+            await notifyCorujao(env, {
+              orderId: order.id,
+              userId: order.userId,
+              amountCents: order.amountCents
+            });
+          }
+        }
       } else if (eventName === "EVENT:CHARGE_EXPIRED" || rawStatus === "EXPIRED") {
         await orders.updateStatus(chargeId, "expired");
       }

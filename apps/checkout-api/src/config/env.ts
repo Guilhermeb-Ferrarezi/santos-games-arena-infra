@@ -19,6 +19,9 @@ const checkoutApiEnvSchema = z.object({
   LOGS_MONGO_DB_NAME: z.string().trim().min(1).default("logs"),
   LOGS_HTTP_COLLECTION: z.string().trim().min(1).default("sga_checkout_api_logs"),
   CHECKOUT_WEB_URL: z.string().trim().url().optional(),
+  CORUJAO_API_URL: z.string().trim().url().optional(),
+  CORUJAO_INTERNAL_SECRET: z.string().trim().min(1).optional(),
+  CORUJAO_PRODUCT_IDS: commaSeparatedList,
   LOGS_ROUTE_BLACKLIST: commaSeparatedList,
   LOGS_GET_ROUTE_BLACKLIST: commaSeparatedList
 });
