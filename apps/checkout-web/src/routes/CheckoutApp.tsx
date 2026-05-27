@@ -70,6 +70,25 @@ function ArrowLeftIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+function MenuIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
+function XIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
 function Spinner() {
   return (
     <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -102,6 +121,8 @@ function FormField({
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
+const WA_SUPPORT = "https://wa.me/5516991069776";
+
 function SgHeader({
   userLogin,
   onBack
@@ -110,43 +131,101 @@ function SgHeader({
   onBack?: () => void;
 }) {
   const [logoErr, setLogoErr] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
-    <header className="border-b border-border/40 bg-surface-1">
-      <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-4">
-          {onBack ? (
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeftIcon />
-              <span>Voltar</span>
-            </button>
-          ) : (
-            <a
-              href="https://santos-games.com"
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeftIcon />
-              <span>Site</span>
-            </a>
-          )}
-          <a href="https://santos-games.com" className="flex items-center">
-            {!logoErr && (
-              <img
-                src="/sga-logo.png"
-                alt="SGA"
-                className="h-8 object-contain"
-                onError={() => setLogoErr(true)}
-              />
+    <>
+      <header className="border-b border-border/40 bg-surface-1 relative z-40">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-4">
+            {onBack ? (
+              <button
+                onClick={onBack}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeftIcon />
+                <span>Voltar</span>
+              </button>
+            ) : (
+              <a
+                href="https://santos-games.com"
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeftIcon />
+                <span>Home</span>
+              </a>
             )}
-          </a>
+            <a href="https://santos-games.com" className="flex items-center">
+              {!logoErr && (
+                <img
+                  src="/sga-logo.png"
+                  alt="SGA"
+                  className="h-8 object-contain"
+                  onError={() => setLogoErr(true)}
+                />
+              )}
+            </a>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {userLogin && (
+              <span className="hidden sm:inline text-sm text-muted-foreground">{userLogin}</span>
+            )}
+            <button
+              className="sm:hidden p-1 text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setMenuOpen(o => !o)}
+              aria-label="Menu"
+            >
+              {menuOpen ? <XIcon /> : <MenuIcon />}
+            </button>
+          </div>
         </div>
-        {userLogin && (
-          <span className="text-sm text-muted-foreground">{userLogin}</span>
-        )}
-      </div>
-    </header>
+      </header>
+
+      {/* Sidebar mobile */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-30 sm:hidden" onClick={() => setMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            className="absolute top-0 right-0 h-full w-64 bg-surface-1 border-l border-border/40 flex flex-col p-6 gap-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Menu</span>
+              <button onClick={() => setMenuOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <XIcon size={18} />
+              </button>
+            </div>
+
+            {userLogin && (
+              <div className="border-b border-border/40 pb-4">
+                <p className="text-xs text-muted-foreground mb-0.5">Logado como</p>
+                <p className="text-sm font-semibold truncate">{userLogin}</p>
+              </div>
+            )}
+
+            <nav className="flex flex-col gap-1">
+              <a
+                href="https://santos-games.com"
+                className="flex items-center gap-3 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+              >
+                <ArrowLeftIcon size={14} />
+                Home
+              </a>
+              <a
+                href={WA_SUPPORT}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+              >
+                <span className="text-[#25d366] text-base leading-none">●</span>
+                Suporte WhatsApp
+              </a>
+            </nav>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
