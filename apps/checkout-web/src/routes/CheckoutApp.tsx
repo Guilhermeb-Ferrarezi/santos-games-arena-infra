@@ -124,16 +124,12 @@ function SgHeader({
           )}
           {!logoErr && (
             <img
-              src="/logo.png"
-              alt=""
-              className="h-8 w-8 object-contain"
-              style={{ filter: "brightness(0) invert(1)" }}
+              src="/sga-logo.png"
+              alt="SGA"
+              className="h-8 object-contain"
               onError={() => setLogoErr(true)}
             />
           )}
-          <span className="font-display font-bold text-lg tracking-wider text-foreground">
-            SANTOS GAMES
-          </span>
         </div>
         {userLogin && (
           <span className="text-sm text-muted-foreground">{userLogin}</span>
@@ -828,54 +824,74 @@ function IntentLoader({
 // ── Products page ─────────────────────────────────────────────────────────────
 
 function ProductCard({ product, onBuy, isLoading }: { product: Product; onBuy: () => void; isLoading?: boolean }) {
-  const features = product.features?.length > 0
-    ? product.features
-    : [product.description].filter(Boolean);
+  const features = (product.features?.length > 0 ? product.features : [product.description].filter(Boolean)).slice(0, 4);
+  const discountedCents = product.discountPercent
+    ? Math.round(product.amountCents * (1 - product.discountPercent / 100))
+    : null;
 
   return (
-    <div className="flex flex-col border border-border/60 bg-surface-1 overflow-hidden transition-all hover:border-primary/40">
-      <div className="flex-1 p-6">
-        <h3 className="text-xl font-display font-bold mb-1">{product.name}</h3>
-        <div className="flex flex-col gap-1 mb-4">
-          {features.map((f, i) => (
-            <div key={i} className="flex items-start gap-2 py-0.5">
-              <span className="mt-0.5 text-[#32BCAD] text-xs">✓</span>
-              <span className="text-sm text-muted-foreground">{f}</span>
-            </div>
-          ))}
-        </div>
-        {product.imageUrl && (
-          <img src={product.imageUrl} alt={product.name} className="w-full h-36 object-cover rounded mb-4" />
+    <div className={`flex flex-col bg-surface-1 overflow-hidden transition-all hover:border-primary/60 border ${product.isCorujao ? "border-primary/50 border-t-2" : "border-border/60"}`}>
+      {/* Imagem hero */}
+      <div className="relative">
+        {product.imageUrl ? (
+          <img src={product.imageUrl} alt={product.name} className="w-full h-44 object-cover" />
+        ) : (
+          <div className="w-full h-44 bg-gradient-to-br from-surface-2 to-surface-3 flex items-center justify-center">
+            <span className="font-display font-bold text-2xl text-muted-foreground/50 uppercase text-center px-4">{product.name}</span>
+          </div>
+        )}
+        {product.isCorujao && (
+          <span className="absolute top-3 left-3 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider px-2 py-1">
+            ⚡ Corujão
+          </span>
         )}
         {product.discountPercent ? (
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <p className="text-3xl font-display font-bold text-primary">
-              {formatCurrency(Math.round(product.amountCents * (1 - product.discountPercent / 100)))}
-            </p>
-            <p className="text-base text-muted-foreground line-through">
+          <span className="absolute top-3 right-3 bg-green-600 text-white text-xs font-bold px-2 py-1">
+            -{product.discountPercent}%
+          </span>
+        ) : null}
+      </div>
+
+      {/* Conteúdo */}
+      <div className="flex flex-col flex-1 p-6 gap-4">
+        <h3 className="text-2xl font-display font-bold leading-tight">{product.name}</h3>
+
+        {/* Preço */}
+        <div>
+          <p className="text-4xl font-display font-bold text-primary leading-none">
+            {formatCurrency(discountedCents ?? product.amountCents)}
+          </p>
+          {discountedCents && (
+            <p className="mt-1 text-sm text-muted-foreground line-through">
               {formatCurrency(product.amountCents)}
             </p>
-            <span className="text-xs font-semibold bg-green-600/20 text-green-400 px-1.5 py-0.5 rounded">
-              -{product.discountPercent}%
-            </span>
-          </div>
-        ) : (
-          <p className="text-3xl font-display font-bold text-primary">
-            {formatCurrency(product.amountCents)}
-          </p>
-        )}
-      </div>
-      <div className="border-t border-border/40 px-6 pb-6 pt-4">
-        <Button className="w-full gap-2" size="lg" onClick={onBuy} disabled={isLoading}>
-          {isLoading ? (
-            <>
-              <Spinner />
-              <span>Aguarde…</span>
-            </>
-          ) : (
-            "Comprar agora"
           )}
-        </Button>
+        </div>
+
+        {/* Features */}
+        {features.length > 0 && (
+          <div className="flex flex-col gap-1.5 border-t border-border/40 pt-4">
+            {features.map((f, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="mt-0.5 text-[#32BCAD] text-xs shrink-0">✓</span>
+                <span className="text-sm text-muted-foreground leading-snug">{f}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-auto pt-2">
+          <Button className="w-full gap-2" size="lg" onClick={onBuy} disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Spinner />
+                <span>Aguarde…</span>
+              </>
+            ) : (
+              <>Garantir agora →</>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -911,7 +927,7 @@ function ProductsPage({
         <main className="mx-auto max-w-4xl px-4 py-10">
           <div className="mb-10 text-center">
             <h2 className="text-4xl font-display font-bold">Escolha seu plano</h2>
-            <p className="mt-2 text-muted-foreground">Pague via PIX e tenha acesso imediato.</p>
+            <p className="mt-2 text-muted-foreground">Garanta sua vaga agora. Vagas limitadas.</p>
           </div>
 
           {intentError && (

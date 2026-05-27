@@ -14,6 +14,7 @@ export type Product = {
   discountPercent: number | null;
   imageKey: string | null;
   imageUrl: string | null;
+  isCorujao?: boolean;
 };
 
 export type Order = {
