@@ -46,6 +46,15 @@ export function registerCheckoutRoutes(
     return { products: list };
   });
 
+  server.get("/product/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const productId = parseInt(id, 10);
+    if (isNaN(productId) || productId <= 0) return reply.code(400).send({ error: "invalid_id" });
+    const product = await products.findById(productId);
+    if (!product) return reply.code(404).send({ error: "product_not_found" });
+    return { product };
+  });
+
   server.get("/coupon/validate", async (request, reply) => {
     const token = request.cookies[env.AUTH_COOKIE_NAME];
     if (!token) return reply.code(401).send({ error: "unauthorized" });
