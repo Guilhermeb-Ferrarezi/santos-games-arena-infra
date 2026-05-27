@@ -113,23 +113,34 @@ function SgHeader({
   return (
     <header className="border-b border-border/40 bg-surface-1">
       <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
-          {onBack && (
+        <div className="flex items-center gap-4">
+          {onBack ? (
             <button
               onClick={onBack}
-              className="mr-1 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeftIcon />
+              <span>Voltar</span>
             </button>
+          ) : (
+            <a
+              href="https://santos-games.com"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeftIcon />
+              <span>Site</span>
+            </a>
           )}
-          {!logoErr && (
-            <img
-              src="/sga-logo.png"
-              alt="SGA"
-              className="h-8 object-contain"
-              onError={() => setLogoErr(true)}
-            />
-          )}
+          <a href="https://santos-games.com" className="flex items-center">
+            {!logoErr && (
+              <img
+                src="/sga-logo.png"
+                alt="SGA"
+                className="h-8 object-contain"
+                onError={() => setLogoErr(true)}
+              />
+            )}
+          </a>
         </div>
         {userLogin && (
           <span className="text-sm text-muted-foreground">{userLogin}</span>
@@ -551,14 +562,11 @@ function PaymentPage({
 
             {/* Método de pagamento */}
             <div className="mb-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("card")}
-                className={`flex items-center justify-center gap-2 border px-3 py-3 text-sm font-semibold transition-colors ${paymentMethod === "card" ? "border-primary/60 bg-primary/10 text-primary" : "border-border/60 bg-surface-1 text-muted-foreground hover:text-foreground"}`}
-              >
+              <div className="relative flex items-center justify-center gap-2 border border-border/40 bg-surface-2/50 px-3 py-3 text-sm font-semibold text-muted-foreground/40 cursor-not-allowed select-none">
                 <CreditCardIcon />
                 <span>Cartão</span>
-              </button>
+                <span className="absolute top-1 right-1 text-[9px] font-bold uppercase tracking-wider bg-muted-foreground/20 text-muted-foreground/60 px-1 py-0.5 leading-none">Em breve</span>
+              </div>
               <button
                 type="button"
                 onClick={() => setPaymentMethod("pix")}
@@ -832,9 +840,9 @@ function ProductCard({ product, onBuy, isLoading }: { product: Product; onBuy: (
   return (
     <div className={`flex flex-col bg-surface-1 overflow-hidden transition-all hover:border-primary/60 border ${product.isCorujao ? "border-primary/50 border-t-2" : "border-border/60"}`}>
       {/* Imagem hero */}
-      <div className="relative">
+      <div className="relative cursor-pointer" onClick={onBuy}>
         {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="w-full h-44 object-cover" />
+          <img src={product.imageUrl} alt={product.name} className="w-full h-52 object-cover" />
         ) : (
           <div className="w-full h-44 bg-gradient-to-br from-surface-2 to-surface-3 flex items-center justify-center">
             <span className="font-display font-bold text-2xl text-muted-foreground/50 uppercase text-center px-4">{product.name}</span>
