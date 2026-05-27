@@ -136,26 +136,20 @@ function SgHeader({
   return (
     <>
       <header className="border-b border-border/40 bg-surface-1 relative z-40">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-4">
-            {onBack ? (
-              <button
-                onClick={onBack}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeftIcon />
-                <span>Voltar</span>
-              </button>
-            ) : (
-              <a
-                href="https://santos-games.com"
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeftIcon />
-                <span>Home</span>
-              </a>
-            )}
-            <a href="https://santos-games.com" className="flex items-center">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-0 h-14">
+          {/* Esquerda */}
+          <div className="flex items-center gap-3 h-full">
+            {/* Hambúrguer — mobile */}
+            <button
+              className="sm:hidden p-1 text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setMenuOpen(o => !o)}
+              aria-label="Menu"
+            >
+              {menuOpen ? <XIcon /> : <MenuIcon />}
+            </button>
+
+            {/* Logo + branding */}
+            <a href="https://santos-games.com" className="flex items-center gap-3 h-full">
               {!logoErr && (
                 <img
                   src="/sga-logo.png"
@@ -164,62 +158,84 @@ function SgHeader({
                   onError={() => setLogoErr(true)}
                 />
               )}
+              <div className="hidden sm:flex flex-col justify-center leading-none">
+                <span className="font-display font-bold text-sm tracking-widest uppercase text-foreground">Santos Games</span>
+                <span className="text-[10px] font-bold tracking-widest uppercase text-primary">Arena</span>
+              </div>
             </a>
+
+            {/* Botão Voltar — quando está num step do checkout */}
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="hidden sm:flex items-center gap-1.5 ml-4 text-sm text-muted-foreground hover:text-foreground transition-colors border-l border-border/40 pl-4"
+              >
+                <ArrowLeftIcon size={14} />
+                <span>Voltar</span>
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center gap-3">
-            {userLogin && (
-              <span className="hidden sm:inline text-sm text-muted-foreground">{userLogin}</span>
-            )}
-            <button
-              className="sm:hidden p-1 text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => setMenuOpen(o => !o)}
-              aria-label="Menu"
-            >
-              {menuOpen ? <XIcon /> : <MenuIcon />}
-            </button>
-          </div>
+          {/* Direita */}
+          {userLogin && (
+            <span className="text-sm text-muted-foreground">{userLogin}</span>
+          )}
         </div>
       </header>
 
-      {/* Sidebar mobile */}
+      {/* Sidebar mobile — desliza da esquerda */}
       {menuOpen && (
         <div className="fixed inset-0 z-30 sm:hidden" onClick={() => setMenuOpen(false)}>
           <div className="absolute inset-0 bg-black/60" />
           <div
-            className="absolute top-0 right-0 h-full w-64 bg-surface-1 border-l border-border/40 flex flex-col p-6 gap-6"
+            className="absolute top-0 left-0 h-full w-64 bg-surface-1 border-r border-border/40 flex flex-col"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Menu</span>
+            {/* Topo sidebar */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border/40">
+              <div className="flex flex-col leading-none">
+                <span className="font-display font-bold text-sm tracking-widest uppercase">Santos Games</span>
+                <span className="text-[10px] font-bold tracking-widest uppercase text-primary">Arena</span>
+              </div>
               <button onClick={() => setMenuOpen(false)} className="text-muted-foreground hover:text-foreground">
                 <XIcon size={18} />
               </button>
             </div>
 
+            {/* Usuário */}
             {userLogin && (
-              <div className="border-b border-border/40 pb-4">
-                <p className="text-xs text-muted-foreground mb-0.5">Logado como</p>
+              <div className="px-5 py-4 border-b border-border/40">
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Logado como</p>
                 <p className="text-sm font-semibold truncate">{userLogin}</p>
               </div>
             )}
 
-            <nav className="flex flex-col gap-1">
+            {/* Nav */}
+            <nav className="flex flex-col gap-0.5 p-3 flex-1">
+              {onBack && (
+                <button
+                  onClick={() => { setMenuOpen(false); onBack(); }}
+                  className="flex items-center gap-3 px-3 py-3 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors text-left w-full"
+                >
+                  <ArrowLeftIcon size={14} />
+                  Voltar
+                </button>
+              )}
               <a
                 href="https://santos-games.com"
-                className="flex items-center gap-3 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                className="flex items-center gap-3 px-3 py-3 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
               >
-                <ArrowLeftIcon size={14} />
+                <span className="text-xs">⌂</span>
                 Home
               </a>
               <a
                 href={WA_SUPPORT}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                className="flex items-center gap-3 px-3 py-3 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
               >
-                <span className="text-[#25d366] text-base leading-none">●</span>
-                Suporte WhatsApp
+                <span className="text-[#25d366] text-sm leading-none">●</span>
+                Suporte
               </a>
             </nav>
           </div>
