@@ -10,6 +10,7 @@ import {
   getCustomerInfo,
   getOrder,
   getPayIntent,
+  getProductById,
   getSession,
   listProducts,
   validateCoupon,
@@ -934,12 +935,146 @@ function ProductsPage({
   );
 }
 
+// ── Product detail page ───────────────────────────────────────────────────────
+
+function ProductDetailPage({
+  productId,
+  session,
+  onBuy,
+}: {
+  productId: number;
+  session: Session;
+  onBuy: (product: Product) => void;
+}) {
+  const intentMutation = useMutation({
+    mutationFn: ({ productId }: { productId: number }) => createPayIntent(productId),
+    onSuccess: (result) => navigate(`/pay/${result.token}`),
+  });
+
+  const { data: product, isLoading, isError } = useQuery({
+    queryKey: ["product", productId],
+    queryFn: () => getProductById(productId),
+    retry: false,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (isError || !product) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <SgHeader />
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-destructive">Produto não encontrado.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const discountedCents = product.discountPercent
+    ? Math.round(product.amountCents * (1 - product.discountPercent / 100))
+    : product.amountCents;
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <SgHeader userLogin={session.user?.login ?? undefined} onBack={() => navigate("/")} />
+      <main className="flex flex-1 items-center justify-center px-4 py-12">
+        <div className="w-full max-w-sm border border-border/60 bg-surface-1 overflow-hidden">
+          {product.imageUrl && (
+            <img src={product.imageUrl} alt={product.name} className="h-40 w-full object-cover" />
+          )}
+          <div className="flex flex-col gap-4 p-6">
+            <div>
+              <h1 className="text-xl font-bold text-foreground">{product.name}</h1>
+              {product.description && (
+                <p className="mt-1 text-sm text-muted-foreground">{product.description}</p>
+              )}
+            </div>
+            {product.features && product.features.length > 0 && (
+              <ul className="flex flex-col gap-1">
+                {product.features.map((f, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <span className="mt-0.5 text-[#32BCAD]">✓</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="border-t border-border/40 pt-3">
+              <p className="text-2xl font-bold text-foreground">
+                {formatCurrency(discountedCents)}
+              </p>
+              {product.discountPercent && (
+                <p className="text-xs text-muted-foreground line-through">
+                  {formatCurrency(product.amountCents)}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => intentMutation.mutate({ productId: product.id })}
+              disabled={intentMutation.isPending}
+              className="flex w-full items-center justify-center gap-2 bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+            >
+              {intentMutation.isPending ? <Spinner /> : "Comprar agora"}
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ── Pay order page ────────────────────────────────────────────────────────────
+
+function PayOrderPage({ orderId, session }: { orderId: number; session: Session }) {
+  const { data: order, isLoading, isError } = useQuery({
+    queryKey: ["order", orderId],
+    queryFn: () => getOrder(orderId),
+    retry: false,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (isError || !order) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <SgHeader userLogin={session.user?.login ?? undefined} />
+        <div className="flex flex-1 items-center justify-center px-4">
+          <p className="text-sm text-destructive">Pedido não encontrado ou acesso negado.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <SgHeader userLogin={session.user?.login ?? undefined} />
+      <div className="flex flex-1 items-center justify-center px-4 py-12">
+        <OrderModal orderId={orderId} onClose={() => navigate("/")} />
+      </div>
+    </div>
+  );
+}
+
 // ── App root ──────────────────────────────────────────────────────────────────
 
 type AppState =
   | { page: "products" }
+  | { page: "product"; productId: number }
   | { page: "intent"; token: string }
   | { page: "payment"; product: Product }
+  | { page: "pay-order"; orderId: number }
   | { page: "order"; orderId: number; product: Product; initialPix?: CreateOrderResult };
 
 export function CheckoutApp() {
@@ -948,20 +1083,20 @@ export function CheckoutApp() {
 
   useEffect(() => {
     function handlePath() {
-      const orderMatch = window.location.pathname.match(/^\/order\/(\d+)$/);
-      const intentMatch = window.location.pathname.match(/^\/pay\/([a-f0-9]+)$/);
-      if (orderMatch) {
-        const orderId = parseInt(orderMatch[1], 10);
-        const state = window.history.state as { pix?: CreateOrderResult; product?: Product } | null;
-        // se tem produto no history state (navegação normal), mantém a PaymentPage como fundo
-        // se não tem (refresh direto na URL), volta para produtos
-        setAppState(
-          state?.product
-            ? { page: "order", orderId, product: state.product, initialPix: state?.pix }
-            : { page: "products" }
-        );
+      const path = window.location.pathname;
+      const produtoMatch  = path.match(/^\/produto\/(\d+)$/);
+      const payOrderMatch = path.match(/^\/pay\/(\d+)$/);
+      const intentMatch   = path.match(/^\/pay\/([a-f0-9]+)$/);
+      const orderMatch    = path.match(/^\/order\/(\d+)$/);
+
+      if (produtoMatch) {
+        setAppState({ page: "product", productId: parseInt(produtoMatch[1], 10) });
+      } else if (payOrderMatch) {
+        setAppState({ page: "pay-order", orderId: parseInt(payOrderMatch[1], 10) });
       } else if (intentMatch) {
         setAppState({ page: "intent", token: intentMatch[1] });
+      } else if (orderMatch) {
+        navigate(`/pay/${orderMatch[1]}`);
       } else {
         setAppState({ page: "products" });
       }
@@ -1005,7 +1140,7 @@ export function CheckoutApp() {
         createdAt: new Date().toISOString()
       });
       // atualiza URL sem disparar handlePath (pushState não dispara popstate nativo)
-      window.history.pushState({ pix: result, product: result.product }, "", `/order/${result.orderId}`);
+      window.history.pushState({ pix: result, product: result.product }, "", `/pay/${result.orderId}`);
       // seta estado diretamente para garantir que o fundo é a PaymentPage
       setAppState({ page: "order", orderId: result.orderId, product: result.product, initialPix: result });
     }
@@ -1024,6 +1159,20 @@ export function CheckoutApp() {
   if (!session?.authenticated || !session.user) {
     redirectToLogin();
     return <LoadingScreen />;
+  }
+
+  if (appState.page === "product") {
+    return (
+      <ProductDetailPage
+        productId={appState.productId}
+        session={session}
+        onBuy={(product) => setAppState({ page: "payment", product })}
+      />
+    );
+  }
+
+  if (appState.page === "pay-order") {
+    return <PayOrderPage orderId={appState.orderId} session={session} />;
   }
 
   if (appState.page === "intent") {

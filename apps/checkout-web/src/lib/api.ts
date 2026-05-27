@@ -127,3 +127,8 @@ export async function getPayIntent(token: string): Promise<Product> {
   const { data } = await checkoutApi.get<{ product: Product }>(`/pay/intent/${token}`);
   return data.product;
 }
+
+export async function getProductById(id: number): Promise<Product> {
+  const { data } = await checkoutApi.get<{ product: Product }>(`/product/${id}`);
+  return data.product;
+}
