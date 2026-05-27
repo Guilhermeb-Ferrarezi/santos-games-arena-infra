@@ -178,7 +178,12 @@ function SgHeader({
 
           {/* Direita */}
           {userLogin && (
-            <span className="text-sm text-muted-foreground">{userLogin}</span>
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline text-sm text-muted-foreground">{userLogin}</span>
+              <div className="h-8 w-8 flex items-center justify-center bg-primary text-primary-foreground text-sm font-bold uppercase shrink-0">
+                {userLogin[0]}
+              </div>
+            </div>
           )}
         </div>
       </header>
