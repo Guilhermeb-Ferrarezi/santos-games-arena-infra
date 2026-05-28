@@ -127,12 +127,12 @@ export function createRefreshTokenRepository(
       const [row] = await postgres<Row[]>`
         insert into "Refresh_Token" (
           user_id, token_hash, device_label, ip, user_agent,
-          created_at, last_used_at, expires_at, revoked_at
+          created_at, updated_at, last_used_at, expires_at, revoked_at
         )
         values (
           ${input.userId}, ${input.tokenHash}, ${input.deviceLabel ?? null},
           ${input.ip ?? null}, ${input.userAgent ?? null},
-          now(), null, ${input.expiresAt}, null
+          now(), now(), null, ${input.expiresAt}, null
         )
         returning id, user_id, token_hash, device_label, ip, user_agent,
                   created_at, last_used_at, expires_at, revoked_at
@@ -183,14 +183,14 @@ export function createRefreshTokenRepository(
 
     async touch(id) {
       await postgres`
-        update "Refresh_Token" set last_used_at = now() where id = ${id}
+        update "Refresh_Token" set last_used_at = now(), updated_at = now() where id = ${id}
       `;
     },
 
     async rotate(oldHash, input) {
       const [oldRow] = await postgres<Row[]>`
         update "Refresh_Token"
-        set revoked_at = now()
+        set revoked_at = now(), updated_at = now()
         where token_hash = ${oldHash} and revoked_at is null
         returning user_id
       `;
@@ -200,12 +200,12 @@ export function createRefreshTokenRepository(
       const [row] = await postgres<Row[]>`
         insert into "Refresh_Token" (
           user_id, token_hash, device_label, ip, user_agent,
-          created_at, last_used_at, expires_at, revoked_at
+          created_at, updated_at, last_used_at, expires_at, revoked_at
         )
         values (
           ${input.userId}, ${input.newTokenHash}, ${input.deviceLabel ?? null},
           ${input.ip ?? null}, ${input.userAgent ?? null},
-          now(), now(), ${input.expiresAt}, null
+          now(), now(), now(), ${input.expiresAt}, null
         )
         returning id, user_id, token_hash, device_label, ip, user_agent,
                   created_at, last_used_at, expires_at, revoked_at
@@ -218,7 +218,7 @@ export function createRefreshTokenRepository(
     async revoke(id, userId) {
       const [row] = await postgres<{ token_hash: string }[]>`
         update "Refresh_Token"
-        set revoked_at = now()
+        set revoked_at = now(), updated_at = now()
         where id = ${id} and user_id = ${userId} and revoked_at is null
         returning token_hash
       `;
@@ -230,7 +230,7 @@ export function createRefreshTokenRepository(
     async revokeByHash(tokenHash) {
       const [row] = await postgres<{ user_id: number }[]>`
         update "Refresh_Token"
-        set revoked_at = now()
+        set revoked_at = now(), updated_at = now()
         where token_hash = ${tokenHash} and revoked_at is null
         returning user_id
       `;
@@ -242,7 +242,7 @@ export function createRefreshTokenRepository(
     async revokeAll(userId) {
       const result = await postgres`
         update "Refresh_Token"
-        set revoked_at = now()
+        set revoked_at = now(), updated_at = now()
         where user_id = ${userId} and revoked_at is null
       `;
       await cacheClearUser(userId);
@@ -252,7 +252,7 @@ export function createRefreshTokenRepository(
     async revokeOthers(userId, exceptHash) {
       const result = await postgres`
         update "Refresh_Token"
-        set revoked_at = now()
+        set revoked_at = now(), updated_at = now()
         where user_id = ${userId}
           and token_hash <> ${exceptHash}
           and revoked_at is null
