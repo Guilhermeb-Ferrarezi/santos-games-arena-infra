@@ -64,6 +64,23 @@ export const legacyAuthSchema = {
     },
     uniqueIndexes: ["provider_external_account_id"]
   },
+  refreshToken: {
+    sourceModel: "auth-api/src/modules/session/refresh-token-repository.ts",
+    table: "Refresh_Token",
+    columns: {
+      id: "id",
+      userId: "user_id",
+      tokenHash: "token_hash",
+      deviceLabel: "device_label",
+      ip: "ip",
+      userAgent: "user_agent",
+      createdAt: "created_at",
+      lastUsedAt: "last_used_at",
+      expiresAt: "expires_at",
+      revokedAt: "revoked_at"
+    },
+    uniqueIndexes: ["token_hash"]
+  },
   authClient: {
     sourceModel: "dotnet-primary-api/SGA_Plataforma.Infrastructure/Models/AuthClient-Models.cs",
     table: "Auth_Client",
