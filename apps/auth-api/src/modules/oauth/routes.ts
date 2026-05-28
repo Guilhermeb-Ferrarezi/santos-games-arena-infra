@@ -5,8 +5,9 @@ import { buildOAuthAuthorizationUrl, isOAuthProvider } from "./providers";
 import type { ExternalAuthAccountRepository } from "./external-auth-account-repository";
 import type { OAuthClient, OAuthProfile } from "./oauth-client";
 import { createOAuthState, readOAuthState } from "./oauth-state";
-import { createSessionToken } from "../session/session-token";
-import { createSessionId, type SessionStore } from "../session/session-store";
+import { issueTokens } from "../session/issue-tokens";
+import type { RefreshTokenRepository } from "../session/refresh-token-repository";
+import type { SessionStore } from "../session/session-store";
 import type { OAuthProvider } from "./providers";
 import type { PlatformUserRepository } from "../users/platform-user-repository";
 import { needsPasswordSetup } from "../auth/password";
@@ -27,6 +28,8 @@ export function registerOAuthRoutes(
     | "NODE_ENV"
     | "OAUTH_STATE_TTL_SECONDS"
     | "SESSION_TTL_SECONDS"
+    | "ACCESS_TOKEN_TTL_SECONDS"
+    | "REFRESH_TOKEN_TTL_SECONDS"
     | "STEAM_API_KEY"
   >,
   dependencies?: {
@@ -36,6 +39,7 @@ export function registerOAuthRoutes(
     users?: PlatformUserRepository;
     authEvents?: AuthEventLogger;
     authClients?: AuthClientRepository;
+    refreshTokens?: RefreshTokenRepository;
   }
 ) {
   server.get("/oauth/:provider/start", async (request, reply) => {
@@ -186,33 +190,13 @@ export function registerOAuthRoutes(
           user
         });
 
-        const sessionId = createSessionId();
-        if (dependencies.sessions) {
-          await dependencies.sessions.create({
-            sessionId,
-            userId: user.id,
-            ttlSeconds: env.SESSION_TTL_SECONDS
-          });
-        }
-
-        const token = await createSessionToken(
-          {
-            userId: user.id,
-            email: user.email,
-            login: user.login,
-            role: user.role,
-            sessionId
-          },
-          env
-        );
-
-        reply.setCookie(env.AUTH_COOKIE_NAME, token, {
-          domain: env.AUTH_COOKIE_DOMAIN,
-          httpOnly: true,
-          maxAge: env.SESSION_TTL_SECONDS,
-          path: "/",
-          sameSite: "lax",
-          secure: env.NODE_ENV === "production"
+        await issueTokens({
+          user: { id: user.id, email: user.email, login: user.login, role: user.role },
+          request,
+          reply,
+          env,
+          sessions: dependencies.sessions,
+          refreshTokens: dependencies.refreshTokens,
         });
 
         return reply.redirect(
@@ -248,33 +232,13 @@ export function registerOAuthRoutes(
         user
       });
 
-      const sessionId = createSessionId();
-      if (dependencies.sessions) {
-        await dependencies.sessions.create({
-          sessionId,
-          userId: user.id,
-          ttlSeconds: env.SESSION_TTL_SECONDS
-        });
-      }
-
-      const token = await createSessionToken(
-        {
-          userId: user.id,
-          email: user.email,
-          login: user.login,
-          role: user.role,
-          sessionId
-        },
-        env
-      );
-
-      reply.setCookie(env.AUTH_COOKIE_NAME, token, {
-        domain: env.AUTH_COOKIE_DOMAIN,
-        httpOnly: true,
-        maxAge: env.SESSION_TTL_SECONDS,
-        path: "/",
-        sameSite: "lax",
-        secure: env.NODE_ENV === "production"
+      await issueTokens({
+        user: { id: user.id, email: user.email, login: user.login, role: user.role },
+        request,
+        reply,
+        env,
+        sessions: dependencies.sessions,
+        refreshTokens: dependencies.refreshTokens,
       });
 
       return reply.redirect(
@@ -306,33 +270,13 @@ export function registerOAuthRoutes(
       user
     });
 
-    const sessionId = createSessionId();
-    if (dependencies.sessions) {
-      await dependencies.sessions.create({
-        sessionId,
-        userId: user.id,
-        ttlSeconds: env.SESSION_TTL_SECONDS
-      });
-    }
-
-    const token = await createSessionToken(
-      {
-        userId: user.id,
-        email: user.email,
-        login: user.login,
-        role: user.role,
-        sessionId
-      },
-      env
-    );
-
-    reply.setCookie(env.AUTH_COOKIE_NAME, token, {
-      domain: env.AUTH_COOKIE_DOMAIN,
-      httpOnly: true,
-      maxAge: env.SESSION_TTL_SECONDS,
-      path: "/",
-      sameSite: "lax",
-      secure: env.NODE_ENV === "production"
+    await issueTokens({
+      user: { id: user.id, email: user.email, login: user.login, role: user.role },
+      request,
+      reply,
+      env,
+      sessions: dependencies.sessions,
+      refreshTokens: dependencies.refreshTokens,
     });
 
     return reply.redirect(oauthState.redirectUri ?? oauthState.returnTo);

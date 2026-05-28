@@ -177,6 +177,8 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
             NODE_ENV: env.NODE_ENV ?? "development",
             OAUTH_STATE_TTL_SECONDS: env.OAUTH_STATE_TTL_SECONDS,
             SESSION_TTL_SECONDS: env.SESSION_TTL_SECONDS ?? 60 * 60 * 24 * 30,
+            ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
+            REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
             STEAM_API_KEY: env.STEAM_API_KEY
           },
           {
@@ -185,7 +187,8 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
             sessions,
             users,
             authEvents: resolvedAuthEvents,
-            authClients
+            authClients,
+            refreshTokens,
           }
         );
       },
