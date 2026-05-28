@@ -6,8 +6,9 @@ import { createPasswordHash, verifyPassword } from "./password";
 import type { AuthClientRepository } from "../clients/client-repository";
 import { resolveClientRedirect } from "../clients/validate-redirect";
 import type { PlatformUserRepository } from "../users/platform-user-repository";
-import { createSessionToken } from "../session/session-token";
-import { createSessionId, type SessionStore } from "../session/session-store";
+import { issueTokens } from "../session/issue-tokens";
+import type { RefreshTokenRepository } from "../session/refresh-token-repository";
+import type { SessionStore } from "../session/session-store";
 import type { OAuthProvider } from "../oauth/providers";
 import type { ExternalAuthAccountRepository } from "../oauth/external-auth-account-repository";
 import { isOAuthProvider } from "../oauth/providers";
@@ -82,11 +83,14 @@ export function registerAuthRoutes(
     | "JWT_SECRET"
     | "NODE_ENV"
     | "SESSION_TTL_SECONDS"
+    | "ACCESS_TOKEN_TTL_SECONDS"
+    | "REFRESH_TOKEN_TTL_SECONDS"
   >,
   users: PlatformUserRepository,
   sessions?: SessionStore,
   externalAccounts?: ExternalAuthAccountRepository,
-  authClients?: AuthClientRepository
+  authClients?: AuthClientRepository,
+  refreshTokens?: RefreshTokenRepository
 ) {
   server.get("/client", async (request, reply) => {
     const query = request.query as { client_id?: string; redirect_uri?: string };
@@ -163,34 +167,13 @@ export function registerAuthRoutes(
 
     await users.updateLastLogin(user.id);
 
-    const sessionId = createSessionId();
-
-    if (sessions) {
-      await sessions.create({
-        sessionId,
-        userId: user.id,
-        ttlSeconds: env.SESSION_TTL_SECONDS
-      });
-    }
-
-    const token = await createSessionToken(
-      {
-        userId: user.id,
-        email: user.email,
-        login: user.login,
-        role: user.role,
-        sessionId
-      },
-      env
-    );
-
-    reply.setCookie(env.AUTH_COOKIE_NAME, token, {
-      domain: env.AUTH_COOKIE_DOMAIN,
-      httpOnly: true,
-      maxAge: env.SESSION_TTL_SECONDS,
-      path: "/",
-      sameSite: "lax",
-      secure: env.NODE_ENV === "production"
+    await issueTokens({
+      user: { id: user.id, email: user.email, login: user.login, role: user.role },
+      request,
+      reply,
+      env,
+      sessions,
+      refreshTokens,
     });
 
     return {
@@ -275,34 +258,13 @@ export function registerAuthRoutes(
 
     await users.updateLastLogin(user.id);
 
-    const sessionId = createSessionId();
-
-    if (sessions) {
-      await sessions.create({
-        sessionId,
-        userId: user.id,
-        ttlSeconds: env.SESSION_TTL_SECONDS
-      });
-    }
-
-    const token = await createSessionToken(
-      {
-        userId: user.id,
-        email: user.email,
-        login: user.login,
-        role: user.role,
-        sessionId
-      },
-      env
-    );
-
-    reply.setCookie(env.AUTH_COOKIE_NAME, token, {
-      domain: env.AUTH_COOKIE_DOMAIN,
-      httpOnly: true,
-      maxAge: env.SESSION_TTL_SECONDS,
-      path: "/",
-      sameSite: "lax",
-      secure: env.NODE_ENV === "production"
+    await issueTokens({
+      user: { id: user.id, email: user.email, login: user.login, role: user.role },
+      request,
+      reply,
+      env,
+      sessions,
+      refreshTokens,
     });
 
     return {

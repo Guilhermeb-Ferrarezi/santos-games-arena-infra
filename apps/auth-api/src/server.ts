@@ -14,6 +14,7 @@ import { registerClientAdminRoutes } from "./modules/clients/routes";
 import type { ExternalAuthAccountRepository } from "./modules/oauth/external-auth-account-repository";
 import type { OAuthClient } from "./modules/oauth/oauth-client";
 import { registerOAuthRoutes } from "./modules/oauth/routes";
+import type { RefreshTokenRepository } from "./modules/session/refresh-token-repository";
 import { registerSessionRoutes } from "./modules/session/routes";
 import type { SessionStore } from "./modules/session/session-store";
 import type { PlatformUserRepository } from "./modules/users/platform-user-repository";
@@ -32,10 +33,11 @@ export type AuthApiServerOptions = {
   sessions?: SessionStore;
   authClients?: AuthClientRepository;
   authEvents?: ReturnType<typeof createAuthEventLogger>;
+  refreshTokens?: RefreshTokenRepository;
 };
 
 export function createAuthApiServer(options: AuthApiServerOptions = {}) {
-  const { dependencies, env, externalAccounts, oauthClient, sessions, users, authClients, authEvents } = options;
+  const { dependencies, env, externalAccounts, oauthClient, sessions, users, authClients, authEvents, refreshTokens } = options;
   const server = Fastify({
     logger: env?.NODE_ENV === "production"
   });
@@ -116,10 +118,13 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
             AUTH_COOKIE_DOMAIN: env.AUTH_COOKIE_DOMAIN,
             AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
             JWT_SECRET: env.JWT_SECRET,
-            NODE_ENV: env.NODE_ENV
+            NODE_ENV: env.NODE_ENV,
+            ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
+            REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
           },
           sessions,
-          users
+          users,
+          refreshTokens,
         );
       },
       { prefix: AUTH_PREFIX }
@@ -142,12 +147,15 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
             AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
             JWT_SECRET: env.JWT_SECRET,
             NODE_ENV: env.NODE_ENV,
-            SESSION_TTL_SECONDS: env.SESSION_TTL_SECONDS
+            SESSION_TTL_SECONDS: env.SESSION_TTL_SECONDS,
+            ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
+            REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
           },
           users,
           sessions,
           externalAccounts,
-          authClients
+          authClients,
+          refreshTokens,
         );
       },
       { prefix: AUTH_PREFIX }

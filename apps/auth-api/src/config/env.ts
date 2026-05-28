@@ -13,6 +13,7 @@ const authApiEnvSchema = z.object({
   AUTH_PUBLIC_URL: z.string().trim().url().optional(),
   JWT_SECRET: nonEmptyString("JWT_SECRET").min(32, "JWT_SECRET must have at least 32 characters"),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 24 * 30),
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 24 * 30),
   OAUTH_STATE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
   CORS_ORIGINS: commaSeparatedList,

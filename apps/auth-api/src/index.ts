@@ -5,6 +5,7 @@ import { parseAuthApiEnv } from "./config/env";
 import { createAuthClientRepository } from "./modules/clients/client-repository";
 import { createExternalAuthAccountRepository } from "./modules/oauth/external-auth-account-repository";
 import { createOAuthClient } from "./modules/oauth/oauth-client";
+import { createRefreshTokenRepository } from "./modules/session/refresh-token-repository";
 import { createRedisSessionStore } from "./modules/session/session-store";
 import { createPlatformUserRepository } from "./modules/users/platform-user-repository";
 import { createAuthApiServer } from "./server";
@@ -17,6 +18,7 @@ const oauthClient = createOAuthClient(env);
 const users = createPlatformUserRepository(postgres);
 const sessions = createRedisSessionStore(redis);
 const authClients = createAuthClientRepository(postgres);
+const refreshTokens = createRefreshTokenRepository(postgres, redis);
 const server = createAuthApiServer({
   env,
   externalAccounts,
@@ -24,6 +26,7 @@ const server = createAuthApiServer({
   sessions,
   users,
   authClients,
+  refreshTokens,
   dependencies: {
     postgres: () => pingPostgres(postgres),
     redis: () => pingRedis(redis)
