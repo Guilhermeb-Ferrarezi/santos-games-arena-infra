@@ -46,7 +46,7 @@ describe("auth login route", () => {
         login: "player"
       }
     });
-    expect(setCookie).toContain("sg_auth=");
+    expect(setCookie).toContain("sga_auth=");
     expect(users.lastLoginUpdatedFor).toBe(1);
 
     await server.close();

@@ -8,7 +8,7 @@ const authApiEnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   DATABASE_URL: urlString("DATABASE_URL"),
   REDIS_URL: urlString("REDIS_URL"),
-  AUTH_COOKIE_NAME: nonEmptyString("AUTH_COOKIE_NAME").default("sg_auth"),
+  AUTH_COOKIE_NAME: nonEmptyString("AUTH_COOKIE_NAME").default("sga_auth"),
   AUTH_COOKIE_DOMAIN: z.string().trim().optional(),
   AUTH_PUBLIC_URL: z.string().trim().url().optional(),
   JWT_SECRET: nonEmptyString("JWT_SECRET").min(32, "JWT_SECRET must have at least 32 characters"),

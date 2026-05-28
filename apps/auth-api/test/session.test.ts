@@ -45,7 +45,7 @@ describe("auth session routes", () => {
       method: "GET",
       url: "/api/auth/session",
       cookies: {
-        sg_auth: token
+        sga_auth: token
       }
     });
 
@@ -76,7 +76,7 @@ describe("auth session routes", () => {
       : response.headers["set-cookie"];
 
     expect(response.statusCode).toBe(204);
-    expect(setCookie).toContain("sg_auth=");
+    expect(setCookie).toContain("sga_auth=");
     expect(setCookie).toContain("Max-Age=0");
 
     await server.close();
@@ -107,7 +107,7 @@ describe("auth session routes", () => {
       method: "POST",
       url: "/api/auth/logout",
       cookies: {
-        sg_auth: token
+        sga_auth: token
       }
     });
 
@@ -144,7 +144,7 @@ describe("auth session routes", () => {
       method: "GET",
       url: "/api/auth/session",
       cookies: {
-        sg_auth: token
+        sga_auth: token
       }
     });
 

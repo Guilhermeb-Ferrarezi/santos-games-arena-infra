@@ -43,7 +43,7 @@ describe("auth register route", () => {
         login: "player"
       }
     });
-    expect(setCookie).toContain("sg_auth=");
+    expect(setCookie).toContain("sga_auth=");
     expect(await users.findByIdentifier("player@santos-games.com")).not.toBeNull();
     expect(await verifyPassword("secret123", (await users.findByIdentifier("player@santos-games.com"))!.passwordHash, env)).toBe(true);
     expect(users.lastLoginUpdatedFor).toBe(1);
@@ -144,7 +144,7 @@ describe("auth password route", () => {
       method: "POST",
       url: "/api/auth/password",
       cookies: {
-        sg_auth: token
+        sga_auth: token
       },
       payload: {
         password: "newsecret123"

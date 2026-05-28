@@ -170,7 +170,7 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
           {
             AUTH_PUBLIC_URL: env.AUTH_PUBLIC_URL,
             AUTH_COOKIE_DOMAIN: env.AUTH_COOKIE_DOMAIN,
-            AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME ?? "sg_auth",
+            AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME ?? "sga_auth",
             DISCORD_CLIENT_ID: env.DISCORD_CLIENT_ID,
             GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID,
             JWT_SECRET: env.JWT_SECRET ?? "",

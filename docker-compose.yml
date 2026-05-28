@@ -8,7 +8,7 @@ services:
       PORT: 3001
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/sga_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      AUTH_COOKIE_NAME: sg_auth
+      AUTH_COOKIE_NAME: sga_auth
       AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
       AUTH_PUBLIC_URL: ${AUTH_PUBLIC_URL:-http://localhost:3001}
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-with-at-least-32-chars}
@@ -36,7 +36,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/sga_db}
       DATABASE_HOME: ${DATABASE_HOME:-postgres://postgres:postgres@postgres:5432/sg_home}
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-with-at-least-32-chars}
-      AUTH_COOKIE_NAME: sg_auth
+      AUTH_COOKIE_NAME: sga_auth
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
       ABACATE_PAY_API_KEY: ${ABACATE_PAY_API_KEY:-}
       ABACATE_PAY_WEBHOOK_SECRET: ${ABACATE_PAY_WEBHOOK_SECRET:-}

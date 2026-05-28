@@ -9,7 +9,7 @@ const checkoutApiEnvSchema = z.object({
   DATABASE_URL: urlString("DATABASE_URL"),
   DATABASE_HOME: urlString("DATABASE_HOME"),
   JWT_SECRET: nonEmptyString("JWT_SECRET").min(32, "JWT_SECRET must have at least 32 characters"),
-  AUTH_COOKIE_NAME: nonEmptyString("AUTH_COOKIE_NAME").default("sg_auth"),
+  AUTH_COOKIE_NAME: nonEmptyString("AUTH_COOKIE_NAME").default("sga_auth"),
   CORS_ORIGINS: commaSeparatedList,
   DOTFY_API_KEY: nonEmptyString("DOTFY_API_KEY"),
   DOTFY_WEBHOOK_SECRET: nonEmptyString("DOTFY_WEBHOOK_SECRET"),

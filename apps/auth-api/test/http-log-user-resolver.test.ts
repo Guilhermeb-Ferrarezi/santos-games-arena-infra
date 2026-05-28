@@ -11,7 +11,7 @@ const env = parseAuthApiEnv({
   DATABASE_URL: "postgres://postgres:secret@localhost:5432/sga_db",
   REDIS_URL: "redis://localhost:6379",
   JWT_SECRET: "a".repeat(32),
-  AUTH_COOKIE_NAME: "sg_auth",
+  AUTH_COOKIE_NAME: "sga_auth",
   AUTH_PUBLIC_URL: "https://auth.santos-games.com"
 });
 
@@ -52,7 +52,7 @@ describe("http log user resolver", () => {
       method: "GET",
       url: "/api/auth/session",
       headers: {
-        cookie: `sg_auth=${encodeURIComponent(sessionToken)}`
+        cookie: `sga_auth=${encodeURIComponent(sessionToken)}`
       }
     });
 

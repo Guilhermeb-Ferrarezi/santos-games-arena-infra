@@ -16,7 +16,7 @@ describe("parseAuthApiEnv", () => {
     });
 
     expect(env.PORT).toBe(3001);
-    expect(env.AUTH_COOKIE_NAME).toBe("sg_auth");
+    expect(env.AUTH_COOKIE_NAME).toBe("sga_auth");
     expect(env.AUTH_COOKIE_DOMAIN).toBe(".santos-games.com");
     expect(env.REDIS_URL).toBe("redis://localhost:6379");
   });

@@ -80,7 +80,7 @@ describe("oauth routes", () => {
 
     expect(response.statusCode).toBe(302);
     expect(response.headers.location).toBe("https://santos-games.com");
-    expect(setCookie).toContain("sg_auth=");
+    expect(setCookie).toContain("sga_auth=");
     expect(externalAccounts.linked.length).toBe(0);
     expect(authEvents.calls).toHaveLength(1);
     expect(authEvents.calls[0]?.event).toBe("oauth_login");
@@ -367,7 +367,7 @@ describe("oauth routes", () => {
 
     expect(response.statusCode).toBe(302);
     expect(response.headers.location).toBe("https://santos-games.com");
-    expect(setCookie).toContain("sg_auth=");
+    expect(setCookie).toContain("sga_auth=");
     expect(authEvents.calls).toHaveLength(1);
     expect(authEvents.calls[0]?.event).toBe("oauth_login");
     expect(authEvents.calls[0]?.provider).toBe("steam");
