@@ -178,6 +178,7 @@ export function registerAuthRoutes(
         userId: user.id,
         email: user.email,
         login: user.login,
+        role: user.role,
         sessionId
       },
       env
@@ -289,6 +290,7 @@ export function registerAuthRoutes(
         userId: user.id,
         email: user.email,
         login: user.login,
+        role: user.role,
         sessionId
       },
       env

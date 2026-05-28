@@ -35,7 +35,8 @@ describe("auth session routes", () => {
       {
         userId: 10,
         email: "player@santos-games.com",
-        login: "player"
+        login: "player",
+        role: 2
       },
       env
     );
@@ -96,6 +97,7 @@ describe("auth session routes", () => {
         userId: 10,
         email: "player@santos-games.com",
         login: "player",
+        role: 2,
         sessionId: "session-1"
       },
       env
@@ -132,7 +134,8 @@ describe("auth session routes", () => {
       {
         userId: 10,
         email: "player@santos-games.com",
-        login: "player"
+        login: "player",
+        role: 2
       },
       env
     );

@@ -42,6 +42,7 @@ describe("http log user resolver", () => {
         userId: user.id,
         email: user.email,
         login: user.login,
+        role: user.role,
         sessionId
       },
       env
@@ -71,6 +72,7 @@ function createUsersRepository(): PlatformUserRepository {
     login: string;
     passwordHash: string;
     isActive: boolean;
+    role: number;
   }>();
 
   return {
@@ -88,7 +90,8 @@ function createUsersRepository(): PlatformUserRepository {
         email: input.email,
         login: input.login,
         passwordHash: input.passwordHash,
-        isActive: true
+        isActive: true,
+        role: 2
       };
       users.set(user.id, user);
       return user;
@@ -99,7 +102,8 @@ function createUsersRepository(): PlatformUserRepository {
         email: input.email,
         login: input.login,
         passwordHash: `oauth:${input.provider}:${input.externalAccountId}`,
-        isActive: true
+        isActive: true,
+        role: 2
       };
       users.set(user.id, user);
       return user;

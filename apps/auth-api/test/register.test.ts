@@ -134,6 +134,7 @@ describe("auth password route", () => {
         userId: 1,
         email: "player@santos-games.com",
         login: "player",
+        role: 2,
         sessionId: "session-1"
       },
       env

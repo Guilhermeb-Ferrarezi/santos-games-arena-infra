@@ -4,6 +4,7 @@ export type SessionTokenUser = {
   userId: number;
   email: string;
   login: string;
+  role: number;
   sessionId?: string;
 };
 
@@ -83,6 +84,7 @@ export async function verifySessionToken(
     userId: payload.userId,
     email: payload.email,
     login: payload.login,
+    role: payload.role,
     sessionId: typeof payload.sessionId === "string" ? payload.sessionId : null,
     expiresAt: payload.exp
   };
@@ -96,6 +98,7 @@ function parsePayload(encodedPayload: string): SessionTokenPayload | null {
       typeof decoded.userId !== "number" ||
       typeof decoded.email !== "string" ||
       typeof decoded.login !== "string" ||
+      typeof decoded.role !== "number" ||
       typeof decoded.exp !== "number"
     ) {
       return null;
@@ -105,6 +108,7 @@ function parsePayload(encodedPayload: string): SessionTokenPayload | null {
       userId: decoded.userId,
       email: decoded.email,
       login: decoded.login,
+      role: decoded.role,
       sessionId: typeof decoded.sessionId === "string" ? decoded.sessionId : undefined,
       exp: decoded.exp
     };
