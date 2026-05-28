@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, Lock, Mail, User as UserIcon } from "lucide-react";
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -62,9 +62,13 @@ export function AuthApp() {
     enabled: hasClientFlow,
     retry: false
   });
-  const clientFlow = clientLookup.data
-    ? { clientId: clientLookup.data.clientId, redirectUri: clientLookup.data.redirectUri }
-    : undefined;
+  const clientFlow = useMemo(
+    () =>
+      clientLookup.data
+        ? { clientId: clientLookup.data.clientId, redirectUri: clientLookup.data.redirectUri }
+        : undefined,
+    [clientLookup.data?.clientId, clientLookup.data?.redirectUri],
+  );
   const clientName = clientLookup.data?.name ?? null;
   const clientFlowError = hasClientFlow && clientLookup.isError;
 
