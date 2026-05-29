@@ -74,4 +74,9 @@ export async function runMigrations(client: PostgresClient): Promise<void> {
     DROP CONSTRAINT IF EXISTS checkout_customers_user_id_fkey
   `.catch(() => {});
 
+  await client`
+    ALTER TABLE checkout_products
+    ADD COLUMN IF NOT EXISTS is_mix BOOLEAN NOT NULL DEFAULT FALSE
+  `;
+
 }

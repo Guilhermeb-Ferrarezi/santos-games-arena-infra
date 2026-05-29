@@ -48,9 +48,35 @@ async function notifyCorujao(
   }
 }
 
+async function notifyMix(
+  env: Pick<CheckoutApiEnv, "MIX_API_URL" | "MIX_INTERNAL_SECRET">,
+  body: { orderId: number; userId: number; amountCents: number }
+): Promise<void> {
+  if (!env.MIX_API_URL || !env.MIX_INTERNAL_SECRET) return;
+
+  try {
+    const res = await fetch(`${env.MIX_API_URL}/api/mix/webhook/confirmar-pagamento`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": env.MIX_INTERNAL_SECRET
+      },
+      body: JSON.stringify(body)
+    });
+    console.log("[webhook] mix notify response", res.status);
+  } catch (err) {
+    console.warn("[webhook] mix notify failed:", err);
+  }
+}
+
 export function registerWebhookRoutes(
   server: FastifyInstance,
-  env: Pick<CheckoutApiEnv, "DOTFY_WEBHOOK_SECRET" | "CORUJAO_API_URL" | "CORUJAO_INTERNAL_SECRET" | "RESEND_FROM">,
+  env: Pick<CheckoutApiEnv,
+    "DOTFY_WEBHOOK_SECRET" |
+    "CORUJAO_API_URL" | "CORUJAO_INTERNAL_SECRET" |
+    "MIX_API_URL" | "MIX_INTERNAL_SECRET" |
+    "RESEND_FROM"
+  >,
   orders: OrderRepository,
   customers: CustomerRepository,
   products: ProductRepository
@@ -113,6 +139,14 @@ export function registerWebhookRoutes(
 
           if (await products.isCorujao(order.productId)) {
             await notifyCorujao(env, {
+              orderId: order.id,
+              userId: order.userId,
+              amountCents: order.amountCents
+            });
+          }
+
+          if (await products.isMix(order.productId)) {
+            await notifyMix(env, {
               orderId: order.id,
               userId: order.userId,
               amountCents: order.amountCents
