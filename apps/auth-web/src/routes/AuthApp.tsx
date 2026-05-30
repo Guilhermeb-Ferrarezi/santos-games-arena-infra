@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Loader2, Lock, Mail, User as UserIcon } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Mail, User as UserIcon, ArrowLeft, ShieldCheck } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -13,7 +13,10 @@ import {
   lookupClient,
   register as registerUser,
   setPassword as submitPasswordSetup,
-  startOAuth
+  startOAuth,
+  forgotPassword,
+  resetPassword,
+  verify2fa,
 } from "@/lib/api";
 
 const mainSiteUrl = "https://santos-games.com";
@@ -35,6 +38,13 @@ export function AuthApp() {
   const queryClient = useQueryClient();
   const isRegister = window.location.pathname.startsWith("/register");
   const isPasswordSetup = window.location.pathname.startsWith("/set-password");
+  const isForgotPassword = window.location.pathname.startsWith("/forgot-password");
+  const isResetPassword = window.location.pathname.startsWith("/reset-password");
+  const is2fa = window.location.pathname.startsWith("/2fa");
+
+  if (isForgotPassword) return <PageShell><ForgotPasswordForm /></PageShell>;
+  if (isResetPassword) return <PageShell><ResetPasswordForm /></PageShell>;
+  if (is2fa) return <PageShell><TwoFactorForm /></PageShell>;
   const searchParams = new URLSearchParams(window.location.search);
   const provider = searchParams.get("provider");
   const oauthEmail = searchParams.get("email") ?? "";
@@ -85,6 +95,13 @@ export function AuthApp() {
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: (data) => {
+      if ((data as any).requires2fa) {
+        const url = new URL("/2fa", window.location.origin);
+        url.searchParams.set("token", (data as any).twoFactorToken);
+        if ((data as any).redirectUri) url.searchParams.set("returnTo", (data as any).redirectUri);
+        window.location.replace(url.toString());
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["session"] });
       if (data.redirectUri) {
         window.location.replace(data.redirectUri);
@@ -631,12 +648,17 @@ export function AuthApp() {
                         )}
                       </Button>
 
-                      <p className="mt-6 text-center text-[10px] uppercase italic tracking-widest text-muted-foreground">
-                        Sem credenciais?{" "}
-                        <a href="/register" className="font-black text-primary transition-colors hover:text-white">
-                          Criar Identidade
+                      <div className="mt-6 flex items-center justify-between text-[10px] uppercase italic tracking-widest text-muted-foreground">
+                        <span>
+                          Sem credenciais?{" "}
+                          <a href="/register" className="font-black text-primary transition-colors hover:text-white">
+                            Criar Identidade
+                          </a>
+                        </span>
+                        <a href="/forgot-password" className="text-muted-foreground/60 hover:text-primary transition-colors">
+                          Esqueceu a senha?
                         </a>
-                      </p>
+                      </div>
                     </>
                   )}
                 </div>
@@ -650,6 +672,230 @@ export function AuthApp() {
         </p>
       </div>
     </main>
+  );
+}
+
+/* ─── Shared shell ──────────────────────────────────────────────────────── */
+function PageShell({ children }: { children: ReactNode }) {
+  return (
+    <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.05]"
+        style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+      <div aria-hidden className="pointer-events-none absolute inset-0"
+        style={{ background: "radial-gradient(circle at 50% 50%, oklch(0.62 0.21 22 / 0.06), transparent 70%)" }} />
+      <div className="relative z-10 flex min-h-dvh flex-col items-center px-4 py-10 sm:px-6">
+        <div className="flex w-full flex-1 flex-col items-center justify-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}
+            className="group relative w-full max-w-md">
+            <div className="absolute -top-4 -left-4 h-8 w-8 border-t border-l border-white/10 transition-colors group-hover:border-primary/40" />
+            <div className="absolute -bottom-4 -right-4 h-8 w-8 border-b border-r border-white/10 transition-colors group-hover:border-primary/40" />
+            <div className="relative overflow-hidden border border-white/5 bg-[var(--surface-2)]/85 p-8 shadow-2xl backdrop-blur-md">
+              <div className="mb-8 flex justify-center border-b border-white/10 pb-6">
+                <img src="/sga-logo.png" alt="Santos Games" className="h-14 w-auto select-none" />
+              </div>
+              {children}
+            </div>
+          </motion.div>
+        </div>
+        <p className="relative z-10 mt-8 text-center text-[10px] uppercase italic tracking-[0.5em] text-muted-foreground/60">
+          SGA ・ Santos Games Arena
+        </p>
+      </div>
+    </main>
+  );
+}
+
+/* ─── Forgot password ───────────────────────────────────────────────────── */
+function ForgotPasswordForm() {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try { await forgotPassword(email); } catch {}
+    setSent(true);
+    setLoading(false);
+  }
+
+  return (
+    <div>
+      <a href="/" className="mb-6 flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-white transition-colors">
+        <ArrowLeft className="h-3 w-3" /> Voltar para o login
+      </a>
+      <h1 className="mb-1 text-2xl font-black uppercase italic leading-none tracking-tight text-white" style={{ fontFamily: "var(--font-display)" }}>
+        Recuperar <span className="text-primary">Senha</span>
+      </h1>
+      <p className="mb-6 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+        Informe seu e-mail para receber o link de redefinição
+      </p>
+      {sent ? (
+        <div className="border border-success/35 bg-[oklch(0.24_0.04_150)]/40 px-4 py-4 text-sm text-[oklch(0.92_0.10_150)]">
+          ✅ Se o e-mail estiver cadastrado, você receberá as instruções em breve. Verifique sua caixa de entrada.
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="forgot-email" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">E-mail</Label>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+              <Input id="forgot-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="player@sga.gg" autoComplete="email"
+                className="h-12 border-white/10 bg-white/5 pl-10 text-white transition-all placeholder:text-white/10 focus:border-primary" />
+            </div>
+          </div>
+          <Button type="submit" disabled={loading || !email}
+            className="h-12 w-full bg-primary text-sm font-black uppercase italic tracking-[0.2em] text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enviar Link"}
+          </Button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/* ─── Reset password ────────────────────────────────────────────────────── */
+function ResetPasswordForm() {
+  const token = new URLSearchParams(window.location.search).get("token") ?? "";
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [show, setShow] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (password !== confirm) { setError("As senhas não coincidem."); return; }
+    if (password.length < 8) { setError("Mínimo 8 caracteres."); return; }
+    setError(null);
+    setLoading(true);
+    try {
+      await resetPassword({ token, password });
+      setDone(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.message ?? "Token inválido ou expirado.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!token) return (
+    <div className="text-sm text-destructive">Token inválido. <a href="/forgot-password" className="underline">Solicite outro link</a>.</div>
+  );
+
+  return (
+    <div>
+      <h1 className="mb-1 text-2xl font-black uppercase italic leading-none tracking-tight text-white" style={{ fontFamily: "var(--font-display)" }}>
+        Nova <span className="text-primary">Senha</span>
+      </h1>
+      <p className="mb-6 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Defina uma nova senha para sua conta</p>
+
+      {done ? (
+        <div className="space-y-4">
+          <div className="border border-success/35 bg-[oklch(0.24_0.04_150)]/40 px-4 py-4 text-sm text-[oklch(0.92_0.10_150)]">
+            ✅ Senha redefinida! Suas sessões anteriores foram encerradas.
+          </div>
+          <a href="/" className="flex items-center justify-center gap-2 h-12 w-full bg-primary text-sm font-black uppercase italic tracking-[0.2em] text-primary-foreground hover:bg-primary/90 transition-colors">
+            Fazer login
+          </a>
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="space-y-4">
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div>
+            <Label htmlFor="new-pass" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">Nova senha</Label>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+              <Input id="new-pass" type={show ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••" autoComplete="new-password"
+                className="h-12 border-white/10 bg-white/5 pl-10 pr-12 text-white transition-all placeholder:text-white/10 focus:border-primary" />
+              <button type="button" onClick={() => setShow(v => !v)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-white">
+                {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="confirm-pass" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">Confirmar senha</Label>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+              <Input id="confirm-pass" type={show ? "text" : "password"} value={confirm} onChange={e => setConfirm(e.target.value)}
+                placeholder="••••••••" autoComplete="new-password"
+                className="h-12 border-white/10 bg-white/5 pl-10 text-white transition-all placeholder:text-white/10 focus:border-primary" />
+            </div>
+          </div>
+          <Button type="submit" disabled={loading || !password || !confirm}
+            className="h-12 w-full bg-primary text-sm font-black uppercase italic tracking-[0.2em] text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Redefinir Senha"}
+          </Button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/* ─── 2FA verification ──────────────────────────────────────────────────── */
+function TwoFactorForm() {
+  const params = new URLSearchParams(window.location.search);
+  const twoFactorToken = params.get("token") ?? "";
+  const returnTo = params.get("returnTo") ?? resolveReturnTo();
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await verify2fa({ twoFactorToken, code });
+      if (data.redirectUri) window.location.replace(data.redirectUri);
+      else window.location.replace(returnTo);
+    } catch (err: any) {
+      setError(err?.response?.data?.message ?? "Código inválido.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-2 bg-primary/10 text-primary">
+          <ShieldCheck className="h-5 w-5" />
+        </div>
+        <div>
+          <h1 className="text-xl font-black uppercase italic leading-none tracking-tight text-white" style={{ fontFamily: "var(--font-display)" }}>
+            Verificação <span className="text-primary">2FA</span>
+          </h1>
+          <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mt-0.5">
+            Abra seu app autenticador e insira o código
+          </p>
+        </div>
+      </div>
+      <form onSubmit={onSubmit} className="space-y-4">
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div>
+          <Label htmlFor="totp-code" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">
+            Código (6 dígitos ou código de recuperação)
+          </Label>
+          <Input id="totp-code" type="text" inputMode="numeric" value={code}
+            onChange={e => setCode(e.target.value.replace(/[^0-9A-Fa-f-]/g, "").slice(0, 12))}
+            placeholder="000000" autoComplete="one-time-code" maxLength={12}
+            className="h-14 border-white/10 bg-white/5 text-center text-2xl font-mono tracking-[0.4em] text-white transition-all placeholder:text-white/10 focus:border-primary" />
+        </div>
+        <Button type="submit" disabled={loading || code.length < 6}
+          className="h-12 w-full bg-primary text-sm font-black uppercase italic tracking-[0.2em] text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verificar e Entrar"}
+        </Button>
+        <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
+          Sem acesso ao app?{" "}
+          <span className="text-muted-foreground">Use um código de recuperação</span>
+        </p>
+      </form>
+    </div>
   );
 }
 

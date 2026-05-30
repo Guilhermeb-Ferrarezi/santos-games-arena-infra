@@ -9,8 +9,10 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1057.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.1.0",
+    "@fastify/multipart": "^10.0.0",
     "@fastify/swagger": "^9.6.1",
     "@fastify/swagger-ui": "^5.2.3",
     "@santos-games/auth-contracts": "workspace:*",
@@ -21,7 +23,9 @@
     "drizzle-orm": "^0.44.7",
     "fastify": "^5.6.2",
     "ioredis": "^5.8.2",
+    "otplib": "^13.4.1",
     "postgres": "^3.4.7",
+    "resend": "^6.12.4",
     "zod": "^4.1.12"
   },
   "devDependencies": {

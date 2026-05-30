@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
+import { randomUUID } from "crypto";
 import { z } from "zod";
 
 import type { AuthApiEnv } from "../../../config/env";
@@ -13,6 +14,8 @@ import type { OAuthProvider } from "../oauth/providers";
 import type { ExternalAuthAccountRepository } from "../oauth/external-auth-account-repository";
 import { isOAuthProvider } from "../oauth/providers";
 import { verifySessionToken } from "../session/session-token";
+import type { EmailService } from "../email/email-service";
+import { verifyTotpCode, verifyBackupCode } from "../totp/totp";
 
 const clientFlowFields = {
   clientId: z.string().trim().min(1).optional(),
@@ -52,10 +55,7 @@ async function resolveOptionalRedirect(
   }
 
   if (!authClients) {
-    reply.code(503).send({
-      error: "clients_not_ready",
-      message: "Validacao de aplicacao indisponivel neste ambiente."
-    });
+    reply.code(503).send({ error: "clients_not_ready", message: "Validacao de aplicacao indisponivel neste ambiente." });
     return "sent_error";
   }
 
@@ -65,285 +65,296 @@ async function resolveOptionalRedirect(
   });
 
   if (!result.ok) {
-    reply.code(400).send({
-      error: result.error.reason,
-      message: "Aplicacao ou redirect_uri invalidos."
-    });
+    reply.code(400).send({ error: result.error.reason, message: "Aplicacao ou redirect_uri invalidos." });
     return "sent_error";
   }
 
   return { redirectUri: result.resolved.redirectUri };
 }
 
+function clientIp(request: Parameters<Parameters<FastifyInstance["post"]>[1]>[0]): string | null {
+  const fwd = request.headers["x-forwarded-for"];
+  if (typeof fwd === "string") return fwd.split(",")[0]?.trim() ?? null;
+  return (request as any).ip ?? null;
+}
+
 export function registerAuthRoutes(
   server: FastifyInstance,
   env: Pick<
     AuthApiEnv,
-    | "AUTH_COOKIE_DOMAIN"
-    | "AUTH_COOKIE_NAME"
-    | "JWT_SECRET"
-    | "NODE_ENV"
-    | "SESSION_TTL_SECONDS"
-    | "ACCESS_TOKEN_TTL_SECONDS"
-    | "REFRESH_TOKEN_TTL_SECONDS"
+    | "AUTH_COOKIE_DOMAIN" | "AUTH_COOKIE_NAME" | "JWT_SECRET" | "NODE_ENV"
+    | "SESSION_TTL_SECONDS" | "ACCESS_TOKEN_TTL_SECONDS" | "REFRESH_TOKEN_TTL_SECONDS"
+    | "APP_BASE_URL"
   >,
   users: PlatformUserRepository,
   sessions?: SessionStore,
   externalAccounts?: ExternalAuthAccountRepository,
   authClients?: AuthClientRepository,
-  refreshTokens?: RefreshTokenRepository
+  refreshTokens?: RefreshTokenRepository,
+  emailService?: EmailService,
+  redis?: import("ioredis").Redis,
 ) {
   server.get("/client", async (request, reply) => {
     const query = request.query as { client_id?: string; redirect_uri?: string };
+    if (!authClients) return reply.code(503).send({ error: "clients_not_ready" });
 
-    if (!authClients) {
-      return reply.code(503).send({
-        error: "clients_not_ready",
-        message: "Validacao de aplicacao indisponivel neste ambiente."
-      });
-    }
-
-    const result = await resolveClientRedirect(authClients, {
-      clientId: query.client_id,
-      redirectUri: query.redirect_uri
-    });
-
-    if (!result.ok) {
-      return reply.code(400).send({ error: result.error.reason });
-    }
+    const result = await resolveClientRedirect(authClients, { clientId: query.client_id, redirectUri: query.redirect_uri });
+    if (!result.ok) return reply.code(400).send({ error: result.error.reason });
 
     return {
       ok: true,
-      client: {
-        clientId: result.resolved.client.clientId,
-        name: result.resolved.client.name
-      },
+      client: { clientId: result.resolved.client.clientId, name: result.resolved.client.name },
       redirectUri: result.resolved.redirectUri
     };
   });
 
   server.post("/login", async (request, reply) => {
-    const parsedBody = loginBodySchema.safeParse(request.body);
+    const parsed = loginBodySchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", message: "Dados de login invalidos." });
 
-    if (!parsedBody.success) {
-      return reply.code(400).send({
-        error: "invalid_request",
-        message: "Dados de login invalidos."
-      });
+    const redirect = await resolveOptionalRedirect(reply, authClients, parsed.data);
+    if (redirect === "sent_error") return;
+
+    const user = await users.findByIdentifier(parsed.data.identifier);
+    if (!user) return reply.code(401).send({ error: "invalid_credentials", message: "Credenciais invalidas." });
+    if (!user.isActive) return reply.code(403).send({ error: "user_inactive", message: "Usuario inativo." });
+
+    const passwordMatches = await verifyPassword(parsed.data.password, user.passwordHash, env);
+    if (!passwordMatches) return reply.code(401).send({ error: "invalid_credentials", message: "Credenciais invalidas." });
+
+    // Se 2FA habilitado — emite token temporário em vez de sessão
+    if (user.totpEnabled && redis) {
+      const twoFactorToken = randomUUID();
+      await redis.set(`auth:2fa:pending:${twoFactorToken}`, JSON.stringify({ userId: user.id }), "EX", 300);
+      return {
+        authenticated: false,
+        requires2fa: true,
+        twoFactorToken,
+        ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
+      };
     }
 
-    const redirect = await resolveOptionalRedirect(reply, authClients, parsedBody.data);
-    if (redirect === "sent_error") {
-      return;
-    }
-
-    const user = await users.findByIdentifier(parsedBody.data.identifier);
-
-    if (!user) {
-      return reply.code(401).send({
-        error: "invalid_credentials",
-        message: "Credenciais invalidas."
-      });
-    }
-
-    if (!user.isActive) {
-      return reply.code(403).send({
-        error: "user_inactive",
-        message: "Usuario inativo."
-      });
-    }
-
-    const passwordMatches = await verifyPassword(
-      parsedBody.data.password,
-      user.passwordHash,
-      env
-    );
-
-    if (!passwordMatches) {
-      return reply.code(401).send({
-        error: "invalid_credentials",
-        message: "Credenciais invalidas."
-      });
+    // Notificação de login apenas quando não há sessões ativas (primeira vez / todas expiradas)
+    if (emailService && refreshTokens) {
+      const activeCount = await users.countActiveRefreshTokens(user.id);
+      if (activeCount === 0) {
+        emailService.sendLoginNotification(user.email, user.login, clientIp(request), request.headers["user-agent"] ?? null).catch(() => {});
+      }
     }
 
     await users.updateLastLogin(user.id);
-
     await issueTokens({
       user: { id: user.id, email: user.email, login: user.login, role: user.role },
-      request,
-      reply,
-      env,
-      sessions,
-      refreshTokens,
+      request, reply, env, sessions, refreshTokens,
     });
 
     return {
       authenticated: true,
       user: {
-        id: user.id,
-        email: user.email,
-        login: user.login,
-        role: user.role,
-        createdAt: user.createdAt?.toISOString() ?? null,
+        id: user.id, email: user.email, login: user.login,
+        role: user.role, createdAt: user.createdAt?.toISOString() ?? null,
+        avatarUrl: user.avatarUrl,
       },
       ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
     };
   });
 
   server.post("/register", async (request, reply) => {
-    const parsedBody = registerBodySchema.safeParse(request.body);
+    const parsed = registerBodySchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", message: "Dados de cadastro invalidos." });
 
-    if (!parsedBody.success) {
-      return reply.code(400).send({
-        error: "invalid_request",
-        message: "Dados de cadastro invalidos."
-      });
-    }
+    const redirect = await resolveOptionalRedirect(reply, authClients, parsed.data);
+    if (redirect === "sent_error") return;
 
-    const redirect = await resolveOptionalRedirect(reply, authClients, parsedBody.data);
-    if (redirect === "sent_error") {
-      return;
-    }
-
-    const normalizedEmail = parsedBody.data.email.trim().toLowerCase();
-    const normalizedLogin = parsedBody.data.login.trim().toLowerCase();
+    const normalizedEmail = parsed.data.email.trim().toLowerCase();
+    const normalizedLogin = parsed.data.login.trim().toLowerCase();
     const existingUser = await users.findByIdentifier(normalizedEmail);
-    const existingLogin = normalizedLogin === normalizedEmail
-      ? existingUser
-      : await users.findByIdentifier(normalizedLogin);
+    const existingLogin = normalizedLogin === normalizedEmail ? existingUser : await users.findByIdentifier(normalizedLogin);
 
     if (existingUser || existingLogin) {
-      return reply.code(409).send({
-        error: "user_exists",
-        message: "Ja existe uma conta com este email ou login."
-      });
+      return reply.code(409).send({ error: "user_exists", message: "Ja existe uma conta com este email ou login." });
     }
 
-    if (parsedBody.data.provider && !isOAuthProvider(parsedBody.data.provider)) {
-      return reply.code(400).send({
-        error: "invalid_provider",
-        message: "Provedor de autenticacao invalido."
-      });
+    if (parsed.data.provider && !isOAuthProvider(parsed.data.provider)) {
+      return reply.code(400).send({ error: "invalid_provider", message: "Provedor de autenticacao invalido." });
     }
 
-    if (parsedBody.data.provider && !parsedBody.data.externalAccountId) {
-      return reply.code(400).send({
-        error: "missing_external_account",
-        message: "Conta externa ausente."
-      });
+    if (parsed.data.provider && !parsed.data.externalAccountId) {
+      return reply.code(400).send({ error: "missing_external_account", message: "Conta externa ausente." });
     }
 
-    if (parsedBody.data.provider && !externalAccounts) {
-      return reply.code(503).send({
-        error: "external_accounts_not_ready",
-        message: "Vinculo de conta externa nao esta pronto neste ambiente."
-      });
+    if (parsed.data.provider && !externalAccounts) {
+      return reply.code(503).send({ error: "external_accounts_not_ready" });
     }
 
-    const passwordHash = await createPasswordHash(parsedBody.data.password);
-    const user = await users.createUser({
-      email: normalizedEmail,
-      login: normalizedLogin,
-      passwordHash
-    });
+    const passwordHash = await createPasswordHash(parsed.data.password);
+    const user = await users.createUser({ email: normalizedEmail, login: normalizedLogin, passwordHash });
 
-    const provider = parsedBody.data.provider as OAuthProvider | undefined;
-    if (provider && parsedBody.data.externalAccountId && externalAccounts) {
+    const provider = parsed.data.provider as OAuthProvider | undefined;
+    if (provider && parsed.data.externalAccountId && externalAccounts) {
       await externalAccounts.linkToUser({
-        provider,
-        externalAccountId: parsedBody.data.externalAccountId,
-        email: normalizedEmail,
-        displayName: parsedBody.data.displayName,
-        avatarUrl: parsedBody.data.avatarUrl,
-        userId: user.id
+        provider, externalAccountId: parsed.data.externalAccountId,
+        email: normalizedEmail, displayName: parsed.data.displayName,
+        avatarUrl: parsed.data.avatarUrl, userId: user.id
       });
     }
 
     await users.updateLastLogin(user.id);
-
     await issueTokens({
       user: { id: user.id, email: user.email, login: user.login, role: user.role },
-      request,
-      reply,
-      env,
-      sessions,
-      refreshTokens,
+      request, reply, env, sessions, refreshTokens,
     });
 
     return {
       authenticated: true,
       user: {
-        id: user.id,
-        email: user.email,
-        login: user.login,
-        role: user.role,
-        createdAt: user.createdAt?.toISOString() ?? null,
+        id: user.id, email: user.email, login: user.login,
+        role: user.role, createdAt: user.createdAt?.toISOString() ?? null,
+        avatarUrl: user.avatarUrl,
       },
       ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
     };
   });
 
   server.post("/password", async (request, reply) => {
-    const parsedBody = setPasswordBodySchema.safeParse(request.body);
+    const parsed = setPasswordBodySchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", message: "Senha invalida." });
 
-    if (!parsedBody.success) {
-      return reply.code(400).send({
-        error: "invalid_request",
-        message: "Senha invalida."
-      });
-    }
+    const redirect = await resolveOptionalRedirect(reply, authClients, parsed.data);
+    if (redirect === "sent_error") return;
 
-    const redirect = await resolveOptionalRedirect(reply, authClients, parsedBody.data);
-    if (redirect === "sent_error") {
-      return;
-    }
-
-    const token = request.cookies[env.AUTH_COOKIE_NAME];
+    const token = (request.cookies as Record<string, string>)[env.AUTH_COOKIE_NAME];
     const session = token ? await verifySessionToken(token, env) : null;
-
-    if (!session) {
-      return reply.code(401).send({
-        error: "unauthorized",
-        message: "Sessao invalida."
-      });
-    }
+    if (!session) return reply.code(401).send({ error: "unauthorized", message: "Sessao invalida." });
 
     if (sessions && (!session.sessionId || !(await sessions.exists(session.sessionId)))) {
-      return reply.code(401).send({
-        error: "unauthorized",
-        message: "Sessao invalida."
-      });
-    }
-
-    const user = await users.findById(session.userId);
-    if (!user) {
       return reply.code(401).send({ error: "unauthorized", message: "Sessao invalida." });
     }
 
-    // Se não é primeiro setup (senha já definida), exige senha atual
+    const user = await users.findById(session.userId);
+    if (!user) return reply.code(401).send({ error: "unauthorized", message: "Sessao invalida." });
+
     const { needsPasswordSetup } = await import("./password");
     if (!needsPasswordSetup(user.passwordHash)) {
-      if (!parsedBody.data.currentPassword) {
-        return reply.code(400).send({
-          error: "current_password_required",
-          message: "Informe a senha atual para alterá-la.",
-        });
+      if (!parsed.data.currentPassword) {
+        return reply.code(400).send({ error: "current_password_required", message: "Informe a senha atual para alterá-la." });
       }
-      const currentMatches = await verifyPassword(parsedBody.data.currentPassword, user.passwordHash, env);
+      const currentMatches = await verifyPassword(parsed.data.currentPassword, user.passwordHash, env);
       if (!currentMatches) {
-        return reply.code(400).send({
-          error: "wrong_current_password",
-          message: "Senha atual incorreta.",
-        });
+        return reply.code(400).send({ error: "wrong_current_password", message: "Senha atual incorreta." });
       }
     }
 
-    const passwordHash = await createPasswordHash(parsedBody.data.password);
+    const passwordHash = await createPasswordHash(parsed.data.password);
     await users.updatePassword(session.userId, passwordHash);
 
+    emailService?.sendPasswordChanged(user.email, user.login).catch(() => {});
+
+    return { success: true, ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {}) };
+  });
+
+  // ─── Forgot / Reset password ─────────────────────────────────────────────
+
+  server.post("/forgot-password", async (request, reply) => {
+    const parsed = z.object({ email: z.string().trim().email() }).safeParse(request.body);
+    // Resposta sempre 200 para não vazar existência de contas
+    reply.code(200).send({ success: true, message: "Se o e-mail estiver cadastrado, você receberá as instruções em breve." });
+
+    if (!parsed.success || !emailService || !redis) return;
+
+    const user = await users.findByIdentifier(parsed.data.email).catch(() => null);
+    if (!user) return;
+
+    const token = randomUUID();
+    await redis.set(`auth:reset:${token}`, JSON.stringify({ userId: user.id }), "EX", 900); // 15 min
+
+    const baseUrl = env.APP_BASE_URL?.replace(/\/$/, "") ?? "";
+    const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+    emailService.sendPasswordReset(user.email, resetUrl).catch(() => {});
+  });
+
+  server.post("/reset-password", async (request, reply) => {
+    const parsed = z.object({
+      token: z.string().min(1),
+      password: z.string().min(8),
+    }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", message: "Dados inválidos." });
+
+    if (!redis) return reply.code(503).send({ error: "unavailable" });
+
+    const redisKey = `auth:reset:${parsed.data.token}`;
+    const raw = await redis.get(redisKey);
+    if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Token inválido ou expirado." });
+
+    const { userId } = JSON.parse(raw) as { userId: number };
+    const user = await users.findById(userId);
+    if (!user) return reply.code(400).send({ error: "invalid_token" });
+
+    const passwordHash = await createPasswordHash(parsed.data.password);
+    await users.updatePassword(userId, passwordHash);
+    await redis.del(redisKey);
+
+    // Revoga todos os refresh tokens — session tokens no Redis expiram naturalmente
+    if (refreshTokens) await refreshTokens.revokeAll(userId).catch(() => {});
+
+    emailService?.sendPasswordChanged(user.email, user.login).catch(() => {});
+
+    return { success: true };
+  });
+
+  // ─── 2FA verify-login (registrado aqui para ter acesso ao issueTokens) ────
+
+  server.post("/2fa/verify-login", async (request, reply) => {
+    const parsed = z.object({
+      twoFactorToken: z.string().min(1),
+      code: z.string().min(6).max(12),
+    }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+
+    if (!redis) return reply.code(503).send({ error: "2fa_unavailable" });
+
+    const redisKey = `auth:2fa:pending:${parsed.data.twoFactorToken}`;
+    const raw = await redis.get(redisKey);
+    if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Token 2FA expirado ou inválido." });
+
+    const { userId } = JSON.parse(raw) as { userId: number };
+    const user = await users.findById(userId);
+    if (!user || !user.totpEnabled || !user.totpSecret) {
+      return reply.code(400).send({ error: "invalid_token" });
+    }
+
+    let verified = false;
+    const code = parsed.data.code.replace(/-/g, "");
+
+    if (/^\d{6}$/.test(code)) {
+      verified = verifyTotpCode(code, user.totpSecret);
+    } else if (user.totpBackupCodes) {
+      const result = verifyBackupCode(code, user.totpBackupCodes);
+      if (result.valid) {
+        await users.updateTotpBackupCodes(userId, result.remaining);
+        verified = true;
+      }
+    }
+
+    if (!verified) {
+      return reply.code(400).send({ error: "invalid_code", message: "Código inválido." });
+    }
+
+    await redis.del(redisKey);
+    await users.updateLastLogin(userId);
+
+    await issueTokens({
+      user: { id: user.id, email: user.email, login: user.login, role: user.role },
+      request, reply, env, sessions, refreshTokens,
+    });
+
     return {
-      success: true,
-      ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
+      authenticated: true,
+      user: {
+        id: user.id, email: user.email, login: user.login,
+        role: user.role, createdAt: user.createdAt?.toISOString() ?? null,
+        avatarUrl: user.avatarUrl,
+      },
     };
   });
 }

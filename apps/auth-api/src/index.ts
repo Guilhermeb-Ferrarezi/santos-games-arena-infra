@@ -27,6 +27,7 @@ const server = createAuthApiServer({
   users,
   authClients,
   refreshTokens,
+  redis,
   dependencies: {
     postgres: () => pingPostgres(postgres),
     redis: () => pingRedis(redis)

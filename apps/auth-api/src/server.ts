@@ -1,8 +1,10 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import type { AuthHealthResponse } from "@santos-games/auth-contracts";
 import { registerMongoHttpLogging } from "@santos-games/logs";
 import Fastify from "fastify";
+import type { Redis } from "ioredis";
 
 import type { AuthApiEnv } from "./config/env";
 import { checkDependencies, type DependencyPingers } from "./infra/dependencies";
@@ -19,6 +21,9 @@ import { registerSessionRoutes } from "./modules/session/routes";
 import type { SessionStore } from "./modules/session/session-store";
 import type { PlatformUserRepository } from "./modules/users/platform-user-repository";
 import { registerOpenApi } from "./openapi";
+import { createEmailService, createNoopEmailService } from "./modules/email/email-service";
+import { registerTotpRoutes } from "./modules/totp/routes";
+import { registerAvatarRoutes } from "./modules/avatar/routes";
 
 const API_PREFIX = "/api";
 const AUTH_PREFIX = `${API_PREFIX}/auth`;
@@ -34,35 +39,24 @@ export type AuthApiServerOptions = {
   authClients?: AuthClientRepository;
   authEvents?: ReturnType<typeof createAuthEventLogger>;
   refreshTokens?: RefreshTokenRepository;
+  redis?: Redis;
 };
 
 export function createAuthApiServer(options: AuthApiServerOptions = {}) {
-  const { dependencies, env, externalAccounts, oauthClient, sessions, users, authClients, authEvents, refreshTokens } = options;
-  const server = Fastify({
-    logger: env?.NODE_ENV === "production"
-  });
+  const { dependencies, env, externalAccounts, oauthClient, sessions, users, authClients, authEvents, refreshTokens, redis } = options;
+  const server = Fastify({ logger: env?.NODE_ENV === "production" });
 
-  server.register(cookie, {
-    secret: env?.JWT_SECRET
-  });
+  server.register(cookie, { secret: env?.JWT_SECRET });
+  server.register(cors, { origin: env?.CORS_ORIGINS?.length ? env.CORS_ORIGINS : true, credentials: true });
+  server.register(multipart);
 
-  server.register(cors, {
-    origin: env?.CORS_ORIGINS?.length ? env.CORS_ORIGINS : true,
-    credentials: true
-  });
+  const emailService = env?.RESEND_API_KEY && env?.RESEND_FROM_EMAIL
+    ? createEmailService(env.RESEND_API_KEY, env.RESEND_FROM_EMAIL, env.APP_BASE_URL)
+    : createNoopEmailService();
 
   if (env?.LOGS_MONGO_URL) {
-    const routeBlacklist = [
-      "/api/auth/session",
-      "/api/health",
-      "/api/health/dependencies",
-      ...(env.LOGS_ROUTE_BLACKLIST ?? [])
-    ];
-    const getRouteBlacklist = [
-      "/api/health",
-      "/api/health/dependencies",
-      ...(env.LOGS_GET_ROUTE_BLACKLIST ?? [])
-    ];
+    const routeBlacklist = ["/api/auth/session", "/api/health", "/api/health/dependencies", ...(env.LOGS_ROUTE_BLACKLIST ?? [])];
+    const getRouteBlacklist = ["/api/health", "/api/health/dependencies", ...(env.LOGS_GET_ROUTE_BLACKLIST ?? [])];
 
     registerMongoHttpLogging(server, {
       mongoUrl: env.LOGS_MONGO_URL,
@@ -71,157 +65,103 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
       routeBlacklist,
       getRouteBlacklist,
       resolveUser: env.AUTH_COOKIE_NAME && env.JWT_SECRET
-        ? createHttpLogUserResolver(
-            {
-              AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
-              JWT_SECRET: env.JWT_SECRET
-            },
-            users,
-            sessions
-          )
+        ? createHttpLogUserResolver({ AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME, JWT_SECRET: env.JWT_SECRET }, users, sessions)
         : undefined
     });
   }
 
-  const resolvedAuthEvents =
-    authEvents ??
-    createAuthEventLogger({
-      LOGS_MONGO_URL: env?.LOGS_MONGO_URL,
-      LOGS_MONGO_DB_NAME: env?.LOGS_MONGO_DB_NAME,
-      LOGS_HTTP_COLLECTION: env?.LOGS_HTTP_COLLECTION
-    });
-
-  server.addHook("onClose", async () => {
-    await resolvedAuthEvents.close();
+  const resolvedAuthEvents = authEvents ?? createAuthEventLogger({
+    LOGS_MONGO_URL: env?.LOGS_MONGO_URL,
+    LOGS_MONGO_DB_NAME: env?.LOGS_MONGO_DB_NAME,
+    LOGS_HTTP_COLLECTION: env?.LOGS_HTTP_COLLECTION
   });
 
-  server.register(registerOpenApi, {
-    prefix: API_PREFIX
-  });
+  server.addHook("onClose", async () => { await resolvedAuthEvents.close(); });
+  server.register(registerOpenApi, { prefix: API_PREFIX });
 
-  server.get("/", async (): Promise<AuthHealthResponse> => ({
-    status: "ok",
-    service: "sga-auth-api"
-  }));
-
-  server.get(`${API_PREFIX}/health`, async (): Promise<AuthHealthResponse> => ({
-    status: "ok",
-    service: "sga-auth-api"
-  }));
+  server.get("/", async (): Promise<AuthHealthResponse> => ({ status: "ok", service: "sga-auth-api" }));
+  server.get(`${API_PREFIX}/health`, async (): Promise<AuthHealthResponse> => ({ status: "ok", service: "sga-auth-api" }));
 
   if (env?.AUTH_COOKIE_NAME && env.JWT_SECRET && env.NODE_ENV) {
-    server.register(
-      async (authServer) => {
-        registerSessionRoutes(
-          authServer,
-          {
-            AUTH_COOKIE_DOMAIN: env.AUTH_COOKIE_DOMAIN,
-            AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
-            JWT_SECRET: env.JWT_SECRET,
-            NODE_ENV: env.NODE_ENV,
-            ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
-            REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
-          },
-          sessions,
-          users,
-          refreshTokens,
-        );
-      },
-      { prefix: AUTH_PREFIX }
-    );
+    server.register(async (s) => {
+      registerSessionRoutes(s, {
+        AUTH_COOKIE_DOMAIN: env.AUTH_COOKIE_DOMAIN,
+        AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
+        JWT_SECRET: env.JWT_SECRET,
+        NODE_ENV: env.NODE_ENV,
+        ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
+        REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
+      }, sessions, users, refreshTokens);
+    }, { prefix: AUTH_PREFIX });
   }
 
-  if (
-    users &&
-    env?.AUTH_COOKIE_NAME &&
-    env.JWT_SECRET &&
-    env.NODE_ENV &&
-    env.SESSION_TTL_SECONDS
-  ) {
-    server.register(
-      async (authServer) => {
-        registerAuthRoutes(
-          authServer,
-          {
-            AUTH_COOKIE_DOMAIN: env.AUTH_COOKIE_DOMAIN,
-            AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
-            JWT_SECRET: env.JWT_SECRET,
-            NODE_ENV: env.NODE_ENV,
-            SESSION_TTL_SECONDS: env.SESSION_TTL_SECONDS,
-            ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
-            REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
-          },
-          users,
-          sessions,
-          externalAccounts,
-          authClients,
-          refreshTokens,
-        );
-      },
-      { prefix: AUTH_PREFIX }
-    );
+  if (users && env?.AUTH_COOKIE_NAME && env.JWT_SECRET && env.NODE_ENV && env.SESSION_TTL_SECONDS) {
+    server.register(async (s) => {
+      registerAuthRoutes(
+        s,
+        {
+          AUTH_COOKIE_DOMAIN: env.AUTH_COOKIE_DOMAIN,
+          AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
+          JWT_SECRET: env.JWT_SECRET,
+          NODE_ENV: env.NODE_ENV,
+          SESSION_TTL_SECONDS: env.SESSION_TTL_SECONDS,
+          ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
+          REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
+          APP_BASE_URL: env.APP_BASE_URL,
+        },
+        users, sessions, externalAccounts, authClients, refreshTokens,
+        emailService, redis,
+      );
+
+      registerTotpRoutes(s, {
+        AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
+        JWT_SECRET: env.JWT_SECRET,
+      }, users, sessions, refreshTokens);
+
+      registerAvatarRoutes(s, {
+        AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
+        JWT_SECRET: env.JWT_SECRET,
+        R2_ENDPOINT: env.R2_ENDPOINT,
+        R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
+        R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
+        R2_BUCKET: env.R2_BUCKET,
+        R2_PUBLIC_URL: env.R2_PUBLIC_URL,
+      }, users, sessions);
+    }, { prefix: AUTH_PREFIX });
   }
 
   if (env?.OAUTH_STATE_TTL_SECONDS) {
-    server.register(
-      async (authServer) => {
-        registerOAuthRoutes(
-          authServer,
-          {
-            AUTH_PUBLIC_URL: env.AUTH_PUBLIC_URL,
-            AUTH_COOKIE_DOMAIN: env.AUTH_COOKIE_DOMAIN,
-            AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME ?? "sga_auth",
-            DISCORD_CLIENT_ID: env.DISCORD_CLIENT_ID,
-            GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID,
-            JWT_SECRET: env.JWT_SECRET ?? "",
-            NODE_ENV: env.NODE_ENV ?? "development",
-            OAUTH_STATE_TTL_SECONDS: env.OAUTH_STATE_TTL_SECONDS,
-            SESSION_TTL_SECONDS: env.SESSION_TTL_SECONDS ?? 60 * 60 * 24 * 30,
-            ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
-            REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
-            STEAM_API_KEY: env.STEAM_API_KEY
-          },
-          {
-            externalAccounts,
-            oauthClient,
-            sessions,
-            users,
-            authEvents: resolvedAuthEvents,
-            authClients,
-            refreshTokens,
-          }
-        );
-      },
-      { prefix: AUTH_PREFIX }
-    );
+    server.register(async (s) => {
+      registerOAuthRoutes(s, {
+        AUTH_PUBLIC_URL: env.AUTH_PUBLIC_URL,
+        AUTH_COOKIE_DOMAIN: env.AUTH_COOKIE_DOMAIN,
+        AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME ?? "sga_auth",
+        DISCORD_CLIENT_ID: env.DISCORD_CLIENT_ID,
+        GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID,
+        JWT_SECRET: env.JWT_SECRET ?? "",
+        NODE_ENV: env.NODE_ENV ?? "development",
+        OAUTH_STATE_TTL_SECONDS: env.OAUTH_STATE_TTL_SECONDS,
+        SESSION_TTL_SECONDS: env.SESSION_TTL_SECONDS ?? 60 * 60 * 24 * 30,
+        ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
+        REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
+        STEAM_API_KEY: env.STEAM_API_KEY
+      }, { externalAccounts, oauthClient, sessions, users, authEvents: resolvedAuthEvents, authClients, refreshTokens });
+    }, { prefix: AUTH_PREFIX });
   }
 
   if (authClients && users && env?.AUTH_COOKIE_NAME && env.JWT_SECRET) {
-    server.register(
-      async (adminServer) => {
-        registerClientAdminRoutes(
-          adminServer,
-          {
-            AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME!,
-            JWT_SECRET: env.JWT_SECRET!
-          },
-          authClients,
-          users,
-          sessions
-        );
-      },
-      { prefix: ADMIN_PREFIX }
-    );
+    server.register(async (s) => {
+      registerClientAdminRoutes(s, {
+        AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME!,
+        JWT_SECRET: env.JWT_SECRET!
+      }, authClients, users, sessions);
+    }, { prefix: ADMIN_PREFIX });
   }
 
   if (dependencies) {
     server.get(`${API_PREFIX}/health/dependencies`, async (_request, reply) => {
       const health = await checkDependencies(dependencies);
-
-      if (health.status === "degraded") {
-        reply.code(503);
-      }
-
+      if (health.status === "degraded") reply.code(503);
       return health;
     });
   }

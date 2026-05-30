@@ -97,6 +97,19 @@ export async function logout() {
   await api.post("/api/auth/logout");
 }
 
+export async function forgotPassword(email: string) {
+  await api.post("/api/auth/forgot-password", { email });
+}
+
+export async function resetPassword(input: { token: string; password: string }) {
+  await api.post("/api/auth/reset-password", input);
+}
+
+export async function verify2fa(input: { twoFactorToken: string; code: string }) {
+  const response = await api.post("/api/auth/2fa/verify-login", input);
+  return loginResponseSchema.parse(response.data);
+}
+
 export function startOAuth(
   provider: "google" | "discord" | "steam",
   options: {

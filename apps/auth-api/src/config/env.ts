@@ -26,7 +26,17 @@ const authApiEnvSchema = z.object({
   LOGS_MONGO_DB_NAME: z.string().trim().min(1).default("logs"),
   LOGS_HTTP_COLLECTION: z.string().trim().min(1).default("sga_auth_api_logs"),
   LOGS_ROUTE_BLACKLIST: commaSeparatedList,
-  LOGS_GET_ROUTE_BLACKLIST: commaSeparatedList
+  LOGS_GET_ROUTE_BLACKLIST: commaSeparatedList,
+  // Email (Resend)
+  RESEND_API_KEY: z.string().trim().optional(),
+  RESEND_FROM_EMAIL: z.string().trim().email().optional(),
+  APP_BASE_URL: z.string().trim().url().optional(),
+  // Cloudflare R2
+  R2_ENDPOINT: z.string().trim().url().optional(),
+  R2_ACCESS_KEY_ID: z.string().trim().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().trim().optional(),
+  R2_BUCKET: z.string().trim().optional(),
+  R2_PUBLIC_URL: z.string().trim().url().optional(),
 });
 
 export type AuthApiEnv = z.infer<typeof authApiEnvSchema>;
