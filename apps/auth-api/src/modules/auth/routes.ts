@@ -27,6 +27,7 @@ const loginBodySchema = z.object({
 
 const setPasswordBodySchema = z.object({
   password: z.string().min(8),
+  currentPassword: z.string().min(1).optional(),
   ...clientFlowFields
 });
 
@@ -312,6 +313,29 @@ export function registerAuthRoutes(
         error: "unauthorized",
         message: "Sessao invalida."
       });
+    }
+
+    const user = await users.findById(session.userId);
+    if (!user) {
+      return reply.code(401).send({ error: "unauthorized", message: "Sessao invalida." });
+    }
+
+    // Se não é primeiro setup (senha já definida), exige senha atual
+    const { needsPasswordSetup } = await import("./password");
+    if (!needsPasswordSetup(user.passwordHash)) {
+      if (!parsedBody.data.currentPassword) {
+        return reply.code(400).send({
+          error: "current_password_required",
+          message: "Informe a senha atual para alterá-la.",
+        });
+      }
+      const currentMatches = await verifyPassword(parsedBody.data.currentPassword, user.passwordHash, env);
+      if (!currentMatches) {
+        return reply.code(400).send({
+          error: "wrong_current_password",
+          message: "Senha atual incorreta.",
+        });
+      }
     }
 
     const passwordHash = await createPasswordHash(parsedBody.data.password);
