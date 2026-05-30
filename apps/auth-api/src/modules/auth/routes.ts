@@ -183,6 +183,7 @@ export function registerAuthRoutes(
         email: user.email,
         login: user.login,
         role: user.role,
+        createdAt: user.createdAt?.toISOString() ?? null,
       },
       ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
     };
@@ -275,6 +276,7 @@ export function registerAuthRoutes(
         email: user.email,
         login: user.login,
         role: user.role,
+        createdAt: user.createdAt?.toISOString() ?? null,
       },
       ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
     };

@@ -11,6 +11,7 @@ export type PlatformUser = {
   passwordHash: string;
   isActive: boolean;
   role: number;
+  createdAt: Date;
 };
 
 export type PlatformUserRepository = {
@@ -44,8 +45,9 @@ export function createPlatformUserRepository(
         password_hash: string;
         is_active: boolean;
         role: number;
+        created_at: Date;
       }>>`
-        select id, email, login, password_hash, is_active, role
+        select id, email, login, password_hash, is_active, role, created_at
         from "User"
         where lower(email) = ${normalizedIdentifier}
            or lower(login) = ${normalizedIdentifier}
@@ -62,7 +64,8 @@ export function createPlatformUserRepository(
         login: user.login,
         passwordHash: user.password_hash,
         isActive: user.is_active,
-        role: user.role
+        role: user.role,
+        createdAt: user.created_at,
       };
     },
 
@@ -74,8 +77,9 @@ export function createPlatformUserRepository(
         password_hash: string;
         is_active: boolean;
         role: number;
+        created_at: Date;
       }>>`
-        select id, email, login, password_hash, is_active, role
+        select id, email, login, password_hash, is_active, role, created_at
         from "User"
         where id = ${userId}
         limit 1
@@ -88,7 +92,8 @@ export function createPlatformUserRepository(
             login: user.login,
             passwordHash: user.password_hash,
             isActive: user.is_active,
-            role: user.role
+            role: user.role,
+            createdAt: user.created_at,
           }
         : null;
     },
@@ -101,6 +106,7 @@ export function createPlatformUserRepository(
         password_hash: string;
         is_active: boolean;
         role: number;
+        created_at: Date;
       }>>`
         insert into "User" (
           email,
@@ -120,7 +126,7 @@ export function createPlatformUserRepository(
           now(),
           now()
         )
-        returning id, email, login, password_hash, is_active, role
+        returning id, email, login, password_hash, is_active, role, created_at
       `;
 
       return {
@@ -129,7 +135,8 @@ export function createPlatformUserRepository(
         login: user.login,
         passwordHash: user.password_hash,
         isActive: user.is_active,
-        role: user.role
+        role: user.role,
+        createdAt: user.created_at,
       };
     },
 
@@ -141,6 +148,7 @@ export function createPlatformUserRepository(
         password_hash: string;
         is_active: boolean;
         role: number;
+        created_at: Date;
       }>>`
         insert into "User" (
           email,
@@ -160,7 +168,7 @@ export function createPlatformUserRepository(
           now(),
           now()
         )
-        returning id, email, login, password_hash, is_active, role
+        returning id, email, login, password_hash, is_active, role, created_at
       `;
 
       return {
@@ -169,7 +177,8 @@ export function createPlatformUserRepository(
         login: user.login,
         passwordHash: user.password_hash,
         isActive: user.is_active,
-        role: user.role
+        role: user.role,
+        createdAt: user.created_at,
       };
     },
 
