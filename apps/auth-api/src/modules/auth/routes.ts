@@ -181,7 +181,8 @@ export function registerAuthRoutes(
       user: {
         id: user.id,
         email: user.email,
-        login: user.login
+        login: user.login,
+        role: user.role,
       },
       ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
     };
@@ -272,7 +273,8 @@ export function registerAuthRoutes(
       user: {
         id: user.id,
         email: user.email,
-        login: user.login
+        login: user.login,
+        role: user.role,
       },
       ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
     };

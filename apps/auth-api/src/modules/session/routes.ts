@@ -75,6 +75,7 @@ export function registerSessionRoutes(
         id: session.userId,
         email: session.email,
         login: session.login,
+        role: session.role,
       },
       needsPasswordSetup: user ? needsPasswordSetup(user.passwordHash) : false,
     };
