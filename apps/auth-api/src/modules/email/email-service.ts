@@ -33,10 +33,10 @@ function emailLayout(content: string): string {
             <td style="padding-bottom:24px;">
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td>
-                    <span style="font-size:11px;font-weight:900;letter-spacing:4px;text-transform:uppercase;color:#ffffff;">SANTOS<span style="color:#f86d83;">.</span>GAMES</span>
+                  <td style="vertical-align:middle;">
+                    <img src="https://santos-games.com/sga-logo.png" alt="Santos Games Arena" height="28" style="display:block;height:28px;width:auto;" />
                   </td>
-                  <td align="right">
+                  <td align="right" style="vertical-align:middle;">
                     <span style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.25);">ARENA</span>
                   </td>
                 </tr>
