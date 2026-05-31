@@ -100,3 +100,44 @@ export function fetchTemplatePreviewUrl(name: string, vars: Record<string, strin
 export function testTemplate(name: string, body: Record<string, string>): Promise<{ ok: boolean }> {
   return post(`/api/admin/templates/${name}/test`, body);
 }
+
+// ── Agendamentos ─────────────────────────────────────────────────────────────
+
+export type ScheduledEmail = {
+  id: string;
+  templateName: string;
+  templateVars: Record<string, string>;
+  to: string;
+  scheduledFor: string;
+  status: "pending" | "sent" | "failed" | "cancelled";
+  createdAt: string;
+  sentAt?: string;
+  errorMsg?: string;
+};
+
+export function fetchScheduled(params: {
+  page: number;
+  limit?: number;
+  status?: string;
+}): Promise<Paginated<ScheduledEmail>> {
+  const q = new URLSearchParams({
+    page: String(params.page),
+    limit: String(params.limit ?? 20),
+    status: params.status ?? "all",
+  });
+  return get(`/api/admin/scheduled?${q}`);
+}
+
+export function createScheduled(body: {
+  templateName: string;
+  templateVars: Record<string, string>;
+  to: string;
+  scheduledFor: string;
+}): Promise<ScheduledEmail> {
+  return post("/api/admin/scheduled", body);
+}
+
+export async function cancelScheduled(id: string): Promise<void> {
+  const r = await fetch(`/api/admin/scheduled/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`${r.status}`);
+}

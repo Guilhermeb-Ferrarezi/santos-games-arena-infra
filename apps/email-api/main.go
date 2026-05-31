@@ -31,6 +31,7 @@ func main() {
 	authServiceURL = getEnv("AUTH_URL", "https://auth.santos-games.com")
 
 	initDB(ctx)
+	go schedulerLoop(ctx)
 
 	port := getEnv("PORT", "3005")
 
@@ -53,6 +54,9 @@ func main() {
 	mux.HandleFunc("GET /api/admin/templates", adminAuth(adminTemplatesHandler))
 	mux.HandleFunc("GET /api/admin/templates/{name}", adminAuth(adminTemplatePreviewHandler))
 	mux.HandleFunc("POST /api/admin/templates/{name}/test", adminAuth(adminTemplateTestHandler))
+	mux.HandleFunc("GET /api/admin/scheduled", adminAuth(adminScheduledListHandler))
+	mux.HandleFunc("POST /api/admin/scheduled", adminAuth(adminScheduledCreateHandler))
+	mux.HandleFunc("DELETE /api/admin/scheduled/{id}", adminAuth(adminScheduledCancelHandler))
 
 	// ── SPA ───────────────────────────────────────────────────────────────────
 	distFS, err := fs.Sub(staticFiles, "dist")

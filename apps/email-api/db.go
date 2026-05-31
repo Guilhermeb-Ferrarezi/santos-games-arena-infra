@@ -16,7 +16,10 @@ const (
 	collectionName = "sga_email_logs"
 )
 
-var emailLogs *mongo.Collection
+var (
+	emailLogs      *mongo.Collection
+	scheduledColl  *mongo.Collection
+)
 
 func initDB(ctx context.Context) {
 	uri := mustEnv("MONGO_URL")
@@ -29,8 +32,10 @@ func initDB(ctx context.Context) {
 		slog.Error("mongo ping failed", "err", err)
 		os.Exit(1)
 	}
-	emailLogs = client.Database(dbName).Collection(collectionName)
-	slog.Info("mongo connected", "db", dbName, "collection", collectionName)
+	db := client.Database(dbName)
+	emailLogs = db.Collection(collectionName)
+	scheduledColl = db.Collection("sga_email_scheduled")
+	slog.Info("mongo connected", "db", dbName)
 }
 
 // EmailLogDoc segue o padrão de logs HTTP da infraestrutura.

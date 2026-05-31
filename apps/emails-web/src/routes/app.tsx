@@ -6,6 +6,7 @@ import { UsersPage } from "./users";
 import { JobsPage } from "./jobs";
 import { WorkersPage } from "./workers";
 import { TemplatesPage } from "./templates";
+import { SchedulePage } from "./schedule";
 import type { AdminUser } from "@/store/auth";
 import { ShieldAlert, Loader } from "lucide-react";
 
@@ -72,7 +73,8 @@ function Router() {
   if (pathname.startsWith("/users"))     return <UsersPage />;
   if (pathname.startsWith("/jobs"))      return <JobsPage />;
   if (pathname.startsWith("/workers"))   return <WorkersPage />;
-  if (pathname.startsWith("/templates")) return <TemplatesPage />;
+  if (pathname.startsWith("/templates"))  return <TemplatesPage />;
+  if (pathname.startsWith("/schedule"))   return <SchedulePage />;
   return <DashboardPage />;
 }
 

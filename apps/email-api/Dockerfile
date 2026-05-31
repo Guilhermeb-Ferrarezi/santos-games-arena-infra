@@ -14,7 +14,7 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY apps/email-api/go.mod apps/email-api/go.sum ./
 RUN go mod download
-COPY apps/email-api/main.go apps/email-api/templates.go apps/email-api/db.go apps/email-api/admin.go ./
+COPY apps/email-api/main.go apps/email-api/templates.go apps/email-api/db.go apps/email-api/admin.go apps/email-api/schedule.go ./
 COPY --from=frontend /web/dist ./dist
 RUN CGO_ENABLED=0 GOOS=linux go build -o email-api .
 

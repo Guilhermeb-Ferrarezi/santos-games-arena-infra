@@ -1,4 +1,4 @@
-import { Mail, Users, Cpu, LayoutDashboard, Zap, LogOut, ChevronRight, FileText } from "lucide-react";
+import { Mail, Users, Cpu, LayoutDashboard, Zap, LogOut, ChevronRight, FileText, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AdminUser } from "@/store/auth";
 import { navigate, usePathContext } from "@/routes/app";
@@ -7,7 +7,8 @@ const NAV = [
   { to: "/",        label: "Dashboard",  icon: LayoutDashboard },
   { to: "/emails",  label: "Emails",     icon: Mail },
   { to: "/users",     label: "Usuários",   icon: Users },
-  { to: "/templates", label: "Templates",  icon: FileText },
+  { to: "/templates", label: "Templates",   icon: FileText },
+  { to: "/schedule",  label: "Agendar",    icon: CalendarClock },
   { to: "/jobs",      label: "Jobs",       icon: Zap },
   { to: "/workers", label: "Workers",    icon: Cpu },
 ];
