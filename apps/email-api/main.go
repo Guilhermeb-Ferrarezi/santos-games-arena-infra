@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"io/fs"
@@ -22,13 +23,20 @@ var (
 )
 
 func main() {
+	ctx := context.Background()
+
 	apiSecret = mustEnv("API_SECRET")
 	fromEmail = mustEnv("RESEND_FROM")
 	rc = resend.NewClient(mustEnv("RESEND_API_KEY"))
+	authServiceURL = getEnv("AUTH_URL", "https://auth.santos-games.com")
+
+	initDB(ctx)
 
 	port := getEnv("PORT", "3005")
 
 	mux := http.NewServeMux()
+
+	// ── Public API ────────────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]string{"status": "ok", "service": "email-api"})
 	})
@@ -38,7 +46,15 @@ func main() {
 	mux.HandleFunc("POST /api/emails/password-changed", auth(passwordChangedHandler))
 	mux.HandleFunc("POST /api/emails/email-change-confirmation", auth(emailChangeConfirmationHandler))
 
-	// Serve emails-web SPA
+	// ── Admin API (auth via sessão) ───────────────────────────────────────────
+	mux.HandleFunc("GET /api/admin/stats", adminAuth(adminStatsHandler))
+	mux.HandleFunc("GET /api/admin/logs", adminAuth(adminLogsHandler))
+	mux.HandleFunc("GET /api/admin/users", adminAuth(adminUsersHandler))
+	mux.HandleFunc("GET /api/admin/templates", adminAuth(adminTemplatesHandler))
+	mux.HandleFunc("GET /api/admin/templates/{name}", adminAuth(adminTemplatePreviewHandler))
+	mux.HandleFunc("POST /api/admin/templates/{name}/test", adminAuth(adminTemplateTestHandler))
+
+	// ── SPA ───────────────────────────────────────────────────────────────────
 	distFS, err := fs.Sub(staticFiles, "dist")
 	if err != nil {
 		slog.Error("failed to sub dist", "err", err)
@@ -46,12 +62,10 @@ func main() {
 	}
 	fileServer := http.FileServer(http.FS(distFS))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// API routes already handled above; anything else → SPA
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			http.NotFound(w, r)
 			return
 		}
-		// Serve file if it exists, otherwise index.html (client-side routing)
 		_, fsErr := fs.Stat(distFS, strings.TrimPrefix(r.URL.Path, "/"))
 		if fsErr != nil {
 			r2 := r.Clone(r.Context())
@@ -69,7 +83,7 @@ func main() {
 	}
 }
 
-// ── Middleware ─────────────────────────────────────────────────────────────────
+// ── API key middleware ─────────────────────────────────────────────────────────
 
 func auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +95,7 @@ func auth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// ── Handlers ───────────────────────────────────────────────────────────────────
+// ── Email handlers ────────────────────────────────────────────────────────────
 
 func welcomeHandler(w http.ResponseWriter, r *http.Request) {
 	var body struct {
@@ -92,7 +106,7 @@ func welcomeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := send(body.To, "Bem-vindo à Santos Games Arena, "+body.Login+"!", tmplWelcome(body.Login))
-	respond(w, err)
+	logAndRespond(w, err, "welcome", body.To, body.Login)
 }
 
 func loginNotificationHandler(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +120,7 @@ func loginNotificationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := send(body.To, "Novo acesso detectado — Santos Games Arena", tmplLoginNotification(body.Login, body.IP, body.UserAgent))
-	respond(w, err)
+	logAndRespond(w, err, "login-notification", body.To, body.Login)
 }
 
 func passwordResetHandler(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +132,7 @@ func passwordResetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := send(body.To, "Redefinição de senha — Santos Games Arena", tmplPasswordReset(body.ResetURL))
-	respond(w, err)
+	logAndRespond(w, err, "password-reset", body.To, "")
 }
 
 func passwordChangedHandler(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +144,7 @@ func passwordChangedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := send(body.To, "Senha alterada — Santos Games Arena", tmplPasswordChanged(body.Login))
-	respond(w, err)
+	logAndRespond(w, err, "password-changed", body.To, body.Login)
 }
 
 func emailChangeConfirmationHandler(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +157,7 @@ func emailChangeConfirmationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := send(body.To, "Confirme seu novo e-mail — Santos Games Arena", tmplEmailChangeConfirmation(body.Login, body.ConfirmURL))
-	respond(w, err)
+	logAndRespond(w, err, "email-change", body.To, body.Login)
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -159,21 +173,23 @@ func send(to, subject, html string) error {
 	return err
 }
 
+func logAndRespond(w http.ResponseWriter, err error, emailType, to, login string) {
+	if err != nil {
+		slog.Error("send error", "err", err)
+		insertEmailLog(emailType, to, login, "failed", err.Error(), "")
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	insertEmailLog(emailType, to, login, "sent", "", "")
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid_body"})
 		return false
 	}
 	return true
-}
-
-func respond(w http.ResponseWriter, err error) {
-	if err != nil {
-		slog.Error("send error", "err", err)
-		writeJSON(w, 500, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

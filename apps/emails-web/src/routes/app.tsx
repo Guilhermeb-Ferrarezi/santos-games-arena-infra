@@ -5,6 +5,7 @@ import { EmailsPage } from "./emails";
 import { UsersPage } from "./users";
 import { JobsPage } from "./jobs";
 import { WorkersPage } from "./workers";
+import { TemplatesPage } from "./templates";
 import type { AdminUser } from "@/store/auth";
 import { ShieldAlert, Loader } from "lucide-react";
 
@@ -67,10 +68,11 @@ export function usePathContext() {
 
 function Router() {
   const pathname = usePathname();
-  if (pathname.startsWith("/emails"))  return <EmailsPage />;
-  if (pathname.startsWith("/users"))   return <UsersPage />;
-  if (pathname.startsWith("/jobs"))    return <JobsPage />;
-  if (pathname.startsWith("/workers")) return <WorkersPage />;
+  if (pathname.startsWith("/emails"))    return <EmailsPage />;
+  if (pathname.startsWith("/users"))     return <UsersPage />;
+  if (pathname.startsWith("/jobs"))      return <JobsPage />;
+  if (pathname.startsWith("/workers"))   return <WorkersPage />;
+  if (pathname.startsWith("/templates")) return <TemplatesPage />;
   return <DashboardPage />;
 }
 
