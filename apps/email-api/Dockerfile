@@ -1,10 +1,22 @@
+# Stage 1: Build emails-web (SPA)
+FROM oven/bun:1-alpine AS frontend
+WORKDIR /web
+COPY apps/emails-web/package.json apps/emails-web/bun.lockb* ./
+COPY packages/ /packages/
+RUN bun install --frozen-lockfile 2>/dev/null || bun install
+COPY apps/emails-web/ .
+RUN bun run build
+
+# Stage 2: Build email-api (Go)
 FROM golang:1.23-alpine AS builder
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY apps/email-api/go.mod apps/email-api/go.sum ./
 RUN go mod download
-COPY . .
+COPY apps/email-api/ .
+COPY --from=frontend /web/dist ./dist
 RUN CGO_ENABLED=0 GOOS=linux go build -o email-api .
 
+# Stage 3: Runtime
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 WORKDIR /app

@@ -1,13 +1,19 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/resend/resend-go/v2"
 )
+
+//go:embed dist
+var staticFiles embed.FS
 
 var (
 	rc        *resend.Client
@@ -31,6 +37,30 @@ func main() {
 	mux.HandleFunc("POST /api/emails/password-reset", auth(passwordResetHandler))
 	mux.HandleFunc("POST /api/emails/password-changed", auth(passwordChangedHandler))
 	mux.HandleFunc("POST /api/emails/email-change-confirmation", auth(emailChangeConfirmationHandler))
+
+	// Serve emails-web SPA
+	distFS, err := fs.Sub(staticFiles, "dist")
+	if err != nil {
+		slog.Error("failed to sub dist", "err", err)
+		os.Exit(1)
+	}
+	fileServer := http.FileServer(http.FS(distFS))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// API routes already handled above; anything else → SPA
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+		// Serve file if it exists, otherwise index.html (client-side routing)
+		_, fsErr := fs.Stat(distFS, strings.TrimPrefix(r.URL.Path, "/"))
+		if fsErr != nil {
+			r2 := r.Clone(r.Context())
+			r2.URL.Path = "/"
+			fileServer.ServeHTTP(w, r2)
+			return
+		}
+		fileServer.ServeHTTP(w, r)
+	})
 
 	slog.Info("email-api listening", "port", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
