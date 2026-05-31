@@ -126,55 +126,45 @@ export function registerTotpRoutes(
     return { success: true };
   });
 
-  // POST /2fa/disable — desabilita 2FA (aceita TOTP, OTP de e-mail ou senha)
+  // POST /2fa/disable — desabilita 2FA via código (TOTP ou OTP de e-mail)
   server.post("/2fa/disable", async (request, reply) => {
-    const body = z.object({
-      code: z.string().optional(),
-      password: z.string().optional(),
-    }).safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: "invalid_request" });
+    const body = z.object({ code: z.string().min(6) }).safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "invalid_request", message: "Informe o código." });
 
     const user = await getAuthedUser(request, env, users, sessions);
     if (!user) return reply.code(401).send({ error: "unauthorized" });
     if (!user.totpEnabled) return reply.code(409).send({ error: "2fa_not_enabled" });
 
-    const { code, password } = body.data;
+    const { code } = body.data;
     let verified = false;
 
-    if (code) {
-      if (user.totpMethod === "authenticator" && user.totpSecret) {
-        verified = verifyTotpCode(code, user.totpSecret);
-        if (!verified && user.totpBackupCodes) {
-          const result = verifyBackupCode(code, user.totpBackupCodes);
-          if (result.valid) {
-            await users.updateTotpBackupCodes(user.id, result.remaining);
-            verified = true;
-          }
-        }
-      } else if (user.totpMethod === "email" && redis) {
-        const disableKey = `auth:2fa:disable:email:${user.id}`;
-        const storedHash = await redis.get(disableKey);
-        if (storedHash) {
-          const status = await consumeOtpAttempt(redis, disableKey);
-          if (status === "locked") {
-            return reply.code(429).send({ error: "too_many_attempts", message: "Muitas tentativas. Solicite um novo código." });
-          }
-          if (safeCompareHex(hashEmailOtp(code), storedHash)) {
-            await redis.del(disableKey, `${disableKey}:attempts`);
-            verified = true;
-          }
+    if (user.totpMethod === "authenticator" && user.totpSecret) {
+      verified = verifyTotpCode(code, user.totpSecret);
+      if (!verified && user.totpBackupCodes) {
+        const result = verifyBackupCode(code, user.totpBackupCodes);
+        if (result.valid) {
+          await users.updateTotpBackupCodes(user.id, result.remaining);
+          verified = true;
         }
       }
-    } else if (password) {
-      const ok = await verifyPassword(password, user.passwordHash, env as any);
-      if (ok) verified = true;
+    } else if (user.totpMethod === "email" && redis) {
+      const disableKey = `auth:2fa:disable:email:${user.id}`;
+      const storedHash = await redis.get(disableKey);
+      if (!storedHash) {
+        return reply.code(400).send({ error: "no_code_sent", message: "Solicite o código de desativação primeiro." });
+      }
+      const status = await consumeOtpAttempt(redis, disableKey);
+      if (status === "locked") {
+        return reply.code(429).send({ error: "too_many_attempts", message: "Muitas tentativas. Solicite um novo código." });
+      }
+      if (safeCompareHex(hashEmailOtp(code), storedHash)) {
+        await redis.del(disableKey, `${disableKey}:attempts`);
+        verified = true;
+      }
     }
 
     if (!verified) {
-      if (!code && !password) {
-        return reply.code(400).send({ error: "missing_verification", message: "Informe o código ou a senha." });
-      }
-      return reply.code(400).send({ error: "invalid_code", message: "Código ou senha inválidos." });
+      return reply.code(400).send({ error: "invalid_code", message: "Código inválido." });
     }
 
     await users.disableTotp(user.id);
