@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { createRouter, RouterProvider, createRoute, createRootRoute, Outlet } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { DashboardPage } from "./dashboard";
 import { EmailsPage } from "./emails";
@@ -8,8 +7,6 @@ import { JobsPage } from "./jobs";
 import { WorkersPage } from "./workers";
 import type { AdminUser } from "@/store/auth";
 import { ShieldAlert, Loader } from "lucide-react";
-
-// ─── Auth check ──────────────────────────────────────────────────────────────
 
 const AUTH_URL = import.meta.env.VITE_AUTH_API_URL ?? "https://auth.santos-games.com";
 
@@ -25,9 +22,39 @@ async function fetchCurrentUser(): Promise<AdminUser | null> {
   }
 }
 
-// ─── Router ──────────────────────────────────────────────────────────────────
+// ─── Simple router ────────────────────────────────────────────────────────────
 
-function AppShell() {
+function usePathname() {
+  const [pathname, setPathname] = useState(() => window.location.pathname);
+  useEffect(() => {
+    const handler = () => setPathname(window.location.pathname);
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
+  return pathname;
+}
+
+export function navigate(to: string) {
+  window.history.pushState(null, "", to);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+export function usePathContext() {
+  return usePathname();
+}
+
+function Router() {
+  const pathname = usePathname();
+  if (pathname.startsWith("/emails"))  return <EmailsPage />;
+  if (pathname.startsWith("/users"))   return <UsersPage />;
+  if (pathname.startsWith("/jobs"))    return <JobsPage />;
+  if (pathname.startsWith("/workers")) return <WorkersPage />;
+  return <DashboardPage />;
+}
+
+// ─── App root ─────────────────────────────────────────────────────────────────
+
+export function App() {
   const [user, setUser]     = useState<AdminUser | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "forbidden" | "unauth">("loading");
 
@@ -49,10 +76,7 @@ function AppShell() {
   }
 
   if (status === "unauth") {
-    const params = new URLSearchParams({
-      client_id: "sga-emails-web",
-      redirect_uri: window.location.origin,
-    });
+    const params = new URLSearchParams({ client_id: "sga-emails-web", redirect_uri: window.location.origin });
     window.location.href = `${AUTH_URL}?${params}`;
     return null;
   }
@@ -65,31 +89,16 @@ function AppShell() {
           <p className="text-lg font-bold text-white">Acesso negado</p>
           <p className="text-sm text-white/40 mt-1">Esta área é exclusiva para administradores.</p>
         </div>
-        <a href={`https://prime.santos-games.com`} className="text-xs text-[#f86d83] hover:underline mt-2">
+        <a href="https://prime.santos-games.com" className="text-xs text-[#f86d83] hover:underline mt-2">
           Voltar para a plataforma
         </a>
       </div>
     );
   }
 
-  return <Layout user={user!}><Outlet /></Layout>;
-}
-
-const rootRoute   = createRootRoute({ component: AppShell });
-const indexRoute  = createRoute({ getParentRoute: () => rootRoute, path: "/",        component: DashboardPage });
-const emailsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/emails",  component: EmailsPage   });
-const usersRoute  = createRoute({ getParentRoute: () => rootRoute, path: "/users",   component: UsersPage    });
-const jobsRoute   = createRoute({ getParentRoute: () => rootRoute, path: "/jobs",    component: JobsPage     });
-const workersRoute= createRoute({ getParentRoute: () => rootRoute, path: "/workers", component: WorkersPage  });
-
-const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, emailsRoute, usersRoute, jobsRoute, workersRoute]),
-});
-
-declare module "@tanstack/react-router" {
-  interface Register { router: typeof router; }
-}
-
-export function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <Layout user={user!}>
+      <Router />
+    </Layout>
+  );
 }

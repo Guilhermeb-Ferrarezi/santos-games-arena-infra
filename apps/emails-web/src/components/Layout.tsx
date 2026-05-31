@@ -1,9 +1,7 @@
-import { Link, useLocation } from "@tanstack/react-router";
-import {
-  Mail, Users, Cpu, LayoutDashboard, Zap, LogOut, ChevronRight,
-} from "lucide-react";
+import { Mail, Users, Cpu, LayoutDashboard, Zap, LogOut, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AdminUser } from "@/store/auth";
+import { navigate, usePathContext } from "@/routes/app";
 
 const NAV = [
   { to: "/",        label: "Dashboard",  icon: LayoutDashboard },
@@ -13,15 +11,15 @@ const NAV = [
   { to: "/workers", label: "Workers",    icon: Cpu },
 ];
 
-function NavLink({ to, label, icon: Icon }: { to: string; label: string; icon: React.ElementType }) {
-  const { pathname } = useLocation();
+function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: React.ElementType }) {
+  const pathname = usePathContext();
   const active = to === "/" ? pathname === "/" : pathname.startsWith(to);
 
   return (
-    <Link
-      to={to}
+    <button
+      onClick={() => navigate(to)}
       className={cn(
-        "flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium transition-colors group",
+        "w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium transition-colors group text-left",
         active
           ? "bg-[#f86d83]/10 text-[#f86d83]"
           : "text-white/40 hover:text-white/80 hover:bg-white/5"
@@ -30,7 +28,7 @@ function NavLink({ to, label, icon: Icon }: { to: string; label: string; icon: R
       <Icon size={16} className={cn(active ? "text-[#f86d83]" : "text-white/30 group-hover:text-white/60")} />
       {label}
       {active && <ChevronRight size={12} className="ml-auto text-[#f86d83]/50" />}
-    </Link>
+    </button>
   );
 }
 
@@ -42,9 +40,7 @@ export function Layout({ user, children }: { user: AdminUser; children: React.Re
 
   return (
     <div className="min-h-screen bg-[#06070a] flex text-white" style={{ fontFamily: "Inter, sans-serif" }}>
-      {/* Sidebar */}
       <aside className="w-56 shrink-0 border-r border-white/[0.06] flex flex-col">
-        {/* Logo */}
         <div className="h-14 flex items-center px-4 border-b border-white/[0.06]">
           <span className="font-black text-sm tracking-widest uppercase" style={{ fontFamily: "Barlow Condensed, sans-serif" }}>
             <span className="text-[#f86d83]">SGA</span>
@@ -52,12 +48,10 @@ export function Layout({ user, children }: { user: AdminUser; children: React.Re
           </span>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 p-2 space-y-0.5">
-          {NAV.map((item) => <NavLink key={item.to} {...item} />)}
+          {NAV.map((item) => <NavItem key={item.to} {...item} />)}
         </nav>
 
-        {/* User footer */}
         <div className="p-3 border-t border-white/[0.06]">
           <div className="flex items-center gap-2.5 px-2 py-2">
             <div className="w-7 h-7 rounded-sm bg-[#f86d83]/20 flex items-center justify-center text-[#f86d83] text-xs font-bold uppercase">
@@ -74,7 +68,6 @@ export function Layout({ user, children }: { user: AdminUser; children: React.Re
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 min-w-0 overflow-auto">
         {children}
       </main>
