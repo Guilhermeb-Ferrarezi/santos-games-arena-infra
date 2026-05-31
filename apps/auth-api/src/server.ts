@@ -21,7 +21,7 @@ import { registerSessionRoutes } from "./modules/session/routes";
 import type { SessionStore } from "./modules/session/session-store";
 import type { PlatformUserRepository } from "./modules/users/platform-user-repository";
 import { registerOpenApi } from "./openapi";
-import { createEmailService, createNoopEmailService } from "./modules/email/email-service";
+import { createEmailService, createHttpEmailService, createNoopEmailService } from "./modules/email/email-service";
 import { registerTotpRoutes } from "./modules/totp/routes";
 import { registerAvatarRoutes } from "./modules/avatar/routes";
 
@@ -50,9 +50,11 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
   server.register(cors, { origin: env?.CORS_ORIGINS?.length ? env.CORS_ORIGINS : true, credentials: true });
   server.register(multipart);
 
-  const emailService = env?.RESEND_API_KEY && env?.RESEND_FROM_EMAIL
-    ? createEmailService(env.RESEND_API_KEY, env.RESEND_FROM_EMAIL, env.APP_BASE_URL)
-    : createNoopEmailService();
+  const emailService = env?.EMAIL_API_URL && env?.EMAIL_API_SECRET
+    ? createHttpEmailService(env.EMAIL_API_URL, env.EMAIL_API_SECRET)
+    : env?.RESEND_API_KEY && env?.RESEND_FROM_EMAIL
+      ? createEmailService(env.RESEND_API_KEY, env.RESEND_FROM_EMAIL, env.APP_BASE_URL)
+      : createNoopEmailService();
 
   if (env?.LOGS_MONGO_URL) {
     const routeBlacklist = ["/api/auth/session", "/api/health", "/api/health/dependencies", ...(env.LOGS_ROUTE_BLACKLIST ?? [])];

@@ -27,9 +27,11 @@ const authApiEnvSchema = z.object({
   LOGS_HTTP_COLLECTION: z.string().trim().min(1).default("sga_auth_api_logs"),
   LOGS_ROUTE_BLACKLIST: commaSeparatedList,
   LOGS_GET_ROUTE_BLACKLIST: commaSeparatedList,
-  // Email (Resend)
+  // Email — via email-api (preferido) ou Resend direto (fallback)
+  EMAIL_API_URL: z.string().trim().url().optional(),
+  EMAIL_API_SECRET: z.string().trim().optional(),
   RESEND_API_KEY: z.string().trim().optional(),
-  RESEND_FROM_EMAIL: z.string().trim().optional(), // aceita "Nome <email>" ou só "email"
+  RESEND_FROM_EMAIL: z.string().trim().optional(),
   APP_BASE_URL: z.string().trim().url().optional(),
   // URL pública da plataforma web (para links de confirmação de e-mail etc.)
   SGA_WEB_URL: z.string().trim().url().optional(),

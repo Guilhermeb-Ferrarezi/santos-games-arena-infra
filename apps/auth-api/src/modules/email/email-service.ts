@@ -262,3 +262,31 @@ export function createNoopEmailService(): EmailService {
     async sendEmailChangeConfirmation() {},
   };
 }
+
+export function createHttpEmailService(baseUrl: string, secret: string): EmailService {
+  const base = baseUrl.replace(/\/$/, "");
+  const headers = { "Content-Type": "application/json", "X-Api-Key": secret };
+
+  async function post(path: string, body: Record<string, string | null>) {
+    const r = await fetch(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(`email-api ${path} → ${r.status}`);
+  }
+
+  return {
+    async sendWelcome(to, login) {
+      await post("/api/emails/welcome", { to, login });
+    },
+    async sendPasswordReset(to, resetUrl) {
+      await post("/api/emails/password-reset", { to, resetUrl });
+    },
+    async sendLoginNotification(to, login, ip, userAgent) {
+      await post("/api/emails/login-notification", { to, login, ip: ip ?? "", userAgent: userAgent ?? "" });
+    },
+    async sendPasswordChanged(to, login) {
+      await post("/api/emails/password-changed", { to, login });
+    },
+    async sendEmailChangeConfirmation(to, login, confirmUrl) {
+      await post("/api/emails/email-change-confirmation", { to, login, confirmUrl });
+    },
+  };
+}
