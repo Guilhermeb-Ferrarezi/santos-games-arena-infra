@@ -34,7 +34,7 @@ function emailLayout(content: string): string {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="vertical-align:middle;">
-                    <img src="https://santos-games.com/sga-logo.png" alt="Santos Games Arena" height="28" style="display:block;height:28px;width:auto;" />
+                    <img src="https://cdn.santos-games.com/emails/favicon.png" alt="SGA" width="32" height="32" style="display:inline-block;width:32px;height:32px;border-radius:6px;vertical-align:middle;margin-right:10px;" /><span style="font-size:13px;font-weight:900;letter-spacing:3px;text-transform:uppercase;color:#ffffff;vertical-align:middle;">SANTOS<span style="color:#f86d83;">.</span>GAMES</span>
                   </td>
                   <td align="right" style="vertical-align:middle;">
                     <span style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.25);">ARENA</span>
