@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import {
   Mail, Users, Cpu, LayoutDashboard, Zap, LogOut, ChevronRight,
 } from "lucide-react";
@@ -14,8 +14,8 @@ const NAV = [
 ];
 
 function NavLink({ to, label, icon: Icon }: { to: string; label: string; icon: React.ElementType }) {
-  const { location } = useRouterState();
-  const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
+  const { pathname } = useLocation();
+  const active = to === "/" ? pathname === "/" : pathname.startsWith(to);
 
   return (
     <Link

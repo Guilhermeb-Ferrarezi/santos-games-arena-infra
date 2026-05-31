@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createRouter, RouterProvider, createRoute, createRootRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createRouter, RouterProvider, createRoute, createRootRoute, Outlet } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { DashboardPage } from "./dashboard";
 import { EmailsPage } from "./emails";
