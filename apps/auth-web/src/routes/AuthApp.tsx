@@ -710,13 +710,25 @@ function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
-    try { await forgotPassword(email); } catch {}
-    setSent(true);
-    setLoading(false);
+    setError(null);
+    try {
+      await forgotPassword(email);
+      setSent(true);
+    } catch (err: any) {
+      const code = err?.response?.data?.error;
+      if (code === "email_not_found") {
+        setError("Nenhuma conta encontrada com este e-mail.");
+      } else {
+        setError("Erro ao enviar o link. Tente novamente.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -732,10 +744,15 @@ function ForgotPasswordForm() {
       </p>
       {sent ? (
         <div className="border border-success/35 bg-[oklch(0.24_0.04_150)]/40 px-4 py-4 text-sm text-[oklch(0.92_0.10_150)]">
-          ✅ Se o e-mail estiver cadastrado, você receberá as instruções em breve. Verifique sua caixa de entrada.
+          ✅ Link enviado! Verifique sua caixa de entrada.
         </div>
       ) : (
         <form onSubmit={onSubmit} className="space-y-4">
+          {error && (
+            <div className="border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
           <div>
             <Label htmlFor="forgot-email" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">E-mail</Label>
             <div className="relative">

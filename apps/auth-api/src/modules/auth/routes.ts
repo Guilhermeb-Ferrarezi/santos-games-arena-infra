@@ -258,20 +258,21 @@ export function registerAuthRoutes(
 
   server.post("/forgot-password", async (request, reply) => {
     const parsed = z.object({ email: z.string().trim().email() }).safeParse(request.body);
-    // Resposta sempre 200 para não vazar existência de contas
-    reply.code(200).send({ success: true, message: "Se o e-mail estiver cadastrado, você receberá as instruções em breve." });
-
-    if (!parsed.success || !emailService || !redis) return;
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
 
     const user = await users.findByIdentifier(parsed.data.email).catch(() => null);
-    if (!user) return;
+    if (!user) return reply.code(404).send({ error: "email_not_found", message: "Nenhuma conta encontrada com este e-mail." });
+
+    if (!emailService || !redis) return reply.code(503).send({ error: "service_unavailable" });
 
     const token = randomUUID();
-    await redis.set(`auth:reset:${token}`, JSON.stringify({ userId: user.id }), "EX", 900); // 15 min
+    await redis.set(`auth:reset:${token}`, JSON.stringify({ userId: user.id }), "EX", 900);
 
     const baseUrl = env.APP_BASE_URL?.replace(/\/$/, "") ?? "";
     const resetUrl = `${baseUrl}/reset-password?token=${token}`;
     emailService.sendPasswordReset(user.email, resetUrl).catch(() => {});
+
+    return reply.code(200).send({ success: true });
   });
 
   server.post("/reset-password", async (request, reply) => {
