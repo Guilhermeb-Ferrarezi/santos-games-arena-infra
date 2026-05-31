@@ -15,6 +15,7 @@ export type PlatformUser = {
   avatarUrl: string | null;
   totpSecret: string | null;
   totpEnabled: boolean;
+  totpMethod: 'authenticator' | 'email' | null;
   totpBackupCodes: string[] | null;
 };
 
@@ -30,6 +31,7 @@ export type PlatformUserRepository = {
   updateLastLogin(userId: number): Promise<void>;
   updateAvatarUrl(userId: number, avatarUrl: string): Promise<void>;
   enableTotp(userId: number, secret: string, backupCodeHashes: string[]): Promise<void>;
+  enableTotpEmail(userId: number): Promise<void>;
   disableTotp(userId: number): Promise<void>;
   updateTotpBackupCodes(userId: number, remaining: string[]): Promise<void>;
   countActiveRefreshTokens(userId: number): Promise<number>;
@@ -46,12 +48,13 @@ type UserRow = {
   avatar_url: string | null;
   totp_secret: string | null;
   totp_enabled: boolean;
+  totp_method: string | null;
   totp_backup_codes: string | null;
 };
 
 const SELECT_FIELDS = `
   id, email, login, password_hash, is_active, role, created_at,
-  avatar_url, totp_secret, totp_enabled, totp_backup_codes
+  avatar_url, totp_secret, totp_enabled, totp_method, totp_backup_codes
 `;
 
 function mapUser(row: UserRow): PlatformUser {
@@ -66,6 +69,7 @@ function mapUser(row: UserRow): PlatformUser {
     avatarUrl: row.avatar_url,
     totpSecret: row.totp_secret,
     totpEnabled: row.totp_enabled ?? false,
+    totpMethod: (row.totp_method as 'authenticator' | 'email' | null) ?? null,
     totpBackupCodes: row.totp_backup_codes ? JSON.parse(row.totp_backup_codes) : null,
   };
 }
@@ -136,7 +140,20 @@ export function createPlatformUserRepository(client: PostgresClient): PlatformUs
         update "User"
         set totp_secret = ${secret},
             totp_enabled = true,
+            totp_method = 'authenticator',
             totp_backup_codes = ${JSON.stringify(backupCodeHashes)},
+            updated_at = now()
+        where id = ${userId}
+      `;
+    },
+
+    async enableTotpEmail(userId) {
+      await client`
+        update "User"
+        set totp_enabled = true,
+            totp_method = 'email',
+            totp_secret = null,
+            totp_backup_codes = null,
             updated_at = now()
         where id = ${userId}
       `;
@@ -147,6 +164,7 @@ export function createPlatformUserRepository(client: PostgresClient): PlatformUs
         update "User"
         set totp_secret = null,
             totp_enabled = false,
+            totp_method = null,
             totp_backup_codes = null,
             updated_at = now()
         where id = ${userId}

@@ -234,3 +234,24 @@ func tmplEmailChangeConfirmation(login, confirmURL string) string {
 			),
 	)
 }
+
+func tmplTwoFactorCode(login, code string) string {
+	return layout(
+		section(fmt.Sprintf(`
+<p style="margin:0 0 8px;">%s</p>
+<h1 style="margin:16px 0 8px;font-size:22px;font-weight:900;color:#fff;letter-spacing:-0.5px;">Código de autenticação</h1>
+<p style="margin:0;font-size:15px;color:rgba(255,255,255,0.55);line-height:1.7;">
+  Olá, <strong style="color:#fff;">%s</strong>. Use o código abaixo para concluir seu acesso.
+  Ele expira em <strong style="color:#fff;">5 minutos</strong>.
+</p>`, badge("Verificação 2FA", "#7c6af8"), esc(login)))+
+			divider()+
+			`<div style="padding:0 32px 32px;text-align:center;">
+  <div style="display:inline-block;background:rgba(124,106,248,0.08);border:1px solid rgba(124,106,248,0.3);border-radius:4px;padding:20px 40px;margin:8px 0;">
+    <span style="font-size:40px;font-weight:900;letter-spacing:12px;color:#fff;font-family:monospace;">`+esc(code)+`</span>
+  </div>
+  <p style="margin:16px 0 0;font-size:12px;color:rgba(255,255,255,0.25);line-height:1.6;">
+    Se você não está tentando fazer login, ignore este e-mail e sua conta permanecerá segura.
+  </p>
+</div>`,
+	)
+}

@@ -17,6 +17,7 @@ import {
   forgotPassword,
   resetPassword,
   verify2fa,
+  resendEmail2fa,
 } from "@/lib/api";
 
 const mainSiteUrl = "https://santos-games.com";
@@ -98,6 +99,7 @@ export function AuthApp() {
       if ((data as any).requires2fa) {
         const url = new URL("/2fa", window.location.origin);
         url.searchParams.set("token", (data as any).twoFactorToken);
+        if ((data as any).method) url.searchParams.set("method", (data as any).method);
         if ((data as any).redirectUri) url.searchParams.set("returnTo", (data as any).redirectUri);
         window.location.replace(url.toString());
         return;
@@ -857,10 +859,15 @@ function ResetPasswordForm() {
 function TwoFactorForm() {
   const params = new URLSearchParams(window.location.search);
   const twoFactorToken = params.get("token") ?? "";
+  const method = (params.get("method") ?? "authenticator") as "authenticator" | "email";
   const returnTo = params.get("returnTo") ?? resolveReturnTo();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isEmail = method === "email";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -877,6 +884,20 @@ function TwoFactorForm() {
     }
   }
 
+  async function handleResend() {
+    setResending(true);
+    setResent(false);
+    setError(null);
+    try {
+      await resendEmail2fa(twoFactorToken);
+      setResent(true);
+    } catch {
+      setError("Não foi possível reenviar o código.");
+    } finally {
+      setResending(false);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
@@ -888,29 +909,42 @@ function TwoFactorForm() {
             Verificação <span className="text-primary">2FA</span>
           </h1>
           <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mt-0.5">
-            Abra seu app autenticador e insira o código
+            {isEmail ? "Código enviado para seu e-mail" : "Abra seu app autenticador e insira o código"}
           </p>
         </div>
       </div>
       <form onSubmit={onSubmit} className="space-y-4">
         {error && <p className="text-sm text-destructive">{error}</p>}
+        {resent && (
+          <p className="text-sm text-[oklch(0.92_0.10_150)]">✓ Código reenviado! Verifique sua caixa de entrada.</p>
+        )}
         <div>
           <Label htmlFor="totp-code" className="mb-1.5 block text-[10px] font-black uppercase italic tracking-widest text-muted-foreground">
-            Código (6 dígitos ou código de recuperação)
+            {isEmail ? "Código de 6 dígitos (e-mail)" : "Código (6 dígitos ou código de recuperação)"}
           </Label>
           <Input id="totp-code" type="text" inputMode="numeric" value={code}
-            onChange={e => setCode(e.target.value.replace(/[^0-9A-Fa-f-]/g, "").slice(0, 12))}
-            placeholder="000000" autoComplete="one-time-code" maxLength={12}
+            onChange={e => setCode(e.target.value.replace(/[^0-9A-Fa-f-]/g, "").slice(0, isEmail ? 6 : 12))}
+            placeholder="000000" autoComplete="one-time-code" maxLength={isEmail ? 6 : 12}
             className="h-14 border-white/10 bg-white/5 text-center text-2xl font-mono tracking-[0.4em] text-white transition-all placeholder:text-white/10 focus:border-primary" />
         </div>
         <Button type="submit" disabled={loading || code.length < 6}
           className="h-12 w-full bg-primary text-sm font-black uppercase italic tracking-[0.2em] text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verificar e Entrar"}
         </Button>
-        <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
-          Sem acesso ao app?{" "}
-          <span className="text-muted-foreground">Use um código de recuperação</span>
-        </p>
+        {isEmail ? (
+          <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
+            Não recebeu?{" "}
+            <button type="button" onClick={handleResend} disabled={resending}
+              className="text-primary hover:text-white transition-colors font-bold disabled:opacity-40">
+              {resending ? "Enviando..." : "Reenviar código"}
+            </button>
+          </p>
+        ) : (
+          <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
+            Sem acesso ao app?{" "}
+            <span className="text-muted-foreground">Use um código de recuperação</span>
+          </p>
+        )}
       </form>
     </div>
   );

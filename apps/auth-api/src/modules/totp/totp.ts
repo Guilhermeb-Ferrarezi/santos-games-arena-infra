@@ -1,5 +1,5 @@
 import { OTP } from "otplib";
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, randomInt } from "crypto";
 
 const otp = new OTP();
 
@@ -28,6 +28,20 @@ export function generateBackupCodes(): string[] {
 
 export function hashBackupCode(code: string): string {
   return createHash("sha256").update(code.replace(/-/g, "").toUpperCase()).digest("hex");
+}
+
+export function generateEmailOtp(): string {
+  return String(randomInt(100000, 1000000));
+}
+
+export function hashEmailOtp(otp: string): string {
+  return createHash("sha256").update(otp).digest("hex");
+}
+
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  const visible = local.slice(0, 2);
+  return `${visible}***@${domain}`;
 }
 
 export function verifyBackupCode(raw: string, hashes: string[]): { valid: boolean; remaining: string[] } {

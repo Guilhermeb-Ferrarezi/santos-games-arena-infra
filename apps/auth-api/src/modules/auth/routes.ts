@@ -15,7 +15,7 @@ import type { ExternalAuthAccountRepository } from "../oauth/external-auth-accou
 import { isOAuthProvider } from "../oauth/providers";
 import { verifySessionToken } from "../session/session-token";
 import type { EmailService } from "../email/email-service";
-import { verifyTotpCode, verifyBackupCode } from "../totp/totp";
+import { verifyTotpCode, verifyBackupCode, generateEmailOtp, hashEmailOtp } from "../totp/totp";
 
 const clientFlowFields = {
   clientId: z.string().trim().min(1).optional(),
@@ -125,11 +125,36 @@ export function registerAuthRoutes(
     // Se 2FA habilitado — emite token temporário em vez de sessão
     if (user.totpEnabled && redis) {
       const twoFactorToken = randomUUID();
-      await redis.set(`auth:2fa:pending:${twoFactorToken}`, JSON.stringify({ userId: user.id }), "EX", 300);
+
+      if (user.totpMethod === "email") {
+        if (!emailService) return reply.code(503).send({ error: "service_unavailable" });
+        const otp = generateEmailOtp();
+        const otpHash = hashEmailOtp(otp);
+        await redis.set(
+          `auth:2fa:pending:${twoFactorToken}`,
+          JSON.stringify({ userId: user.id, method: "email", otpHash }),
+          "EX", 300,
+        );
+        emailService.sendTwoFactorCode(user.email, user.login, otp).catch(() => {});
+        return {
+          authenticated: false,
+          requires2fa: true,
+          twoFactorToken,
+          method: "email",
+          ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
+        };
+      }
+
+      await redis.set(
+        `auth:2fa:pending:${twoFactorToken}`,
+        JSON.stringify({ userId: user.id, method: "authenticator" }),
+        "EX", 300,
+      );
       return {
         authenticated: false,
         requires2fa: true,
         twoFactorToken,
+        method: "authenticator",
         ...(redirect.redirectUri ? { redirectUri: redirect.redirectUri } : {})
       };
     }
@@ -319,22 +344,33 @@ export function registerAuthRoutes(
     const raw = await redis.get(redisKey);
     if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Token 2FA expirado ou inválido." });
 
-    const { userId } = JSON.parse(raw) as { userId: number };
+    const { userId, method = "authenticator", otpHash } = JSON.parse(raw) as {
+      userId: number;
+      method?: string;
+      otpHash?: string;
+    };
     const user = await users.findById(userId);
-    if (!user || !user.totpEnabled || !user.totpSecret) {
+    if (!user || !user.totpEnabled) {
       return reply.code(400).send({ error: "invalid_token" });
     }
 
     let verified = false;
     const code = parsed.data.code.replace(/-/g, "");
 
-    if (/^\d{6}$/.test(code)) {
-      verified = verifyTotpCode(code, user.totpSecret);
-    } else if (user.totpBackupCodes) {
-      const result = verifyBackupCode(code, user.totpBackupCodes);
-      if (result.valid) {
-        await users.updateTotpBackupCodes(userId, result.remaining);
-        verified = true;
+    if (method === "email") {
+      if (!otpHash) return reply.code(400).send({ error: "invalid_token" });
+      const inputHash = hashEmailOtp(code.slice(0, 6));
+      verified = inputHash === otpHash;
+    } else {
+      if (!user.totpSecret) return reply.code(400).send({ error: "invalid_token" });
+      if (/^\d{6}$/.test(code)) {
+        verified = verifyTotpCode(code, user.totpSecret);
+      } else if (user.totpBackupCodes) {
+        const result = verifyBackupCode(code, user.totpBackupCodes);
+        if (result.valid) {
+          await users.updateTotpBackupCodes(userId, result.remaining);
+          verified = true;
+        }
       }
     }
 
@@ -358,6 +394,32 @@ export function registerAuthRoutes(
         avatarUrl: user.avatarUrl,
       },
     };
+  });
+
+  // POST /2fa/email/resend — reenvia OTP de e-mail para login pendente
+  server.post("/2fa/email/resend", async (request, reply) => {
+    const body = z.object({ twoFactorToken: z.string().min(1) }).safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "invalid_request" });
+
+    if (!redis) return reply.code(503).send({ error: "service_unavailable" });
+
+    const redisKey = `auth:2fa:pending:${body.data.twoFactorToken}`;
+    const raw = await redis.get(redisKey);
+    if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Token expirado." });
+
+    const { userId, method } = JSON.parse(raw) as { userId: number; method?: string };
+    if (method !== "email") return reply.code(400).send({ error: "wrong_method" });
+
+    const user = await users.findById(userId);
+    if (!user) return reply.code(400).send({ error: "invalid_token" });
+    if (!emailService) return reply.code(503).send({ error: "service_unavailable" });
+
+    const otp = generateEmailOtp();
+    const otpHash = hashEmailOtp(otp);
+    await redis.set(redisKey, JSON.stringify({ userId, method: "email", otpHash }), "EX", 300);
+    emailService.sendTwoFactorCode(user.email, user.login, otp).catch(() => {});
+
+    return { ok: true };
   });
 
   // ─── Alteração de e-mail ──────────────────────────────────────────────────

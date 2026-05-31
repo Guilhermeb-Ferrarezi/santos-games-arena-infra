@@ -118,7 +118,7 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
       registerTotpRoutes(s, {
         AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,
         JWT_SECRET: env.JWT_SECRET,
-      }, users, sessions, refreshTokens);
+      }, users, sessions, refreshTokens, emailService, redis);
 
       registerAvatarRoutes(s, {
         AUTH_COOKIE_NAME: env.AUTH_COOKIE_NAME,

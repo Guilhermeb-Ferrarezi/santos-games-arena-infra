@@ -20,6 +20,7 @@ const loginResponseSchema = z.union([
   z.object({
     requires2fa: z.literal(true),
     twoFactorToken: z.string(),
+    method: z.enum(["authenticator", "email"]).optional(),
     redirectUri: z.string().url().optional(),
   }),
 ]);
@@ -111,6 +112,10 @@ export async function resetPassword(input: { token: string; password: string }) 
 export async function verify2fa(input: { twoFactorToken: string; code: string }) {
   const response = await api.post("/api/auth/2fa/verify-login", input);
   return loginResponseSchema.parse(response.data);
+}
+
+export async function resendEmail2fa(twoFactorToken: string): Promise<void> {
+  await api.post("/api/auth/2fa/email/resend", { twoFactorToken });
 }
 
 export function startOAuth(

@@ -10,6 +10,7 @@ export type EmailService = {
   sendLoginNotification(to: string, login: string, ip: string | null, userAgent: string | null): Promise<void>;
   sendPasswordChanged(to: string, login: string): Promise<void>;
   sendEmailChangeConfirmation(to: string, login: string, confirmUrl: string): Promise<void>;
+  sendTwoFactorCode(to: string, login: string, code: string): Promise<void>;
 };
 
 // ─── Layout base ─────────────────────────────────────────────────────────────
@@ -250,6 +251,29 @@ export function createEmailService(apiKey: string, fromEmail: string, _appBaseUr
         `)}
       `));
     },
+
+    async sendTwoFactorCode(to, login, code) {
+      await send(to, `Seu código de verificação — Santos Games Arena`, emailLayout(`
+        ${cardSection(`
+          <p style="margin:0 0 8px;">${badge("Verificação 2FA", "#7c6af8")}</p>
+          <h1 style="margin:16px 0 8px;font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;">
+            Código de autenticação
+          </h1>
+          <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.55);line-height:1.7;">
+            Olá, <strong style="color:#fff;">${esc(login)}</strong>. Use o código abaixo para concluir seu acesso. Ele expira em <strong style="color:#fff;">5 minutos</strong>.
+          </p>
+        `)}
+        ${divider()}
+        <div style="padding:0 32px 32px;text-align:center;">
+          <div style="display:inline-block;background:rgba(124,106,248,0.08);border:1px solid rgba(124,106,248,0.3);border-radius:4px;padding:20px 40px;margin:8px 0;">
+            <span style="font-size:40px;font-weight:900;letter-spacing:12px;color:#fff;font-family:monospace;">${esc(code)}</span>
+          </div>
+          <p style="margin:16px 0 0;font-size:12px;color:rgba(255,255,255,0.25);line-height:1.6;">
+            Se você não está tentando fazer login, ignore este e-mail e sua conta permanecerá segura.
+          </p>
+        </div>
+      `));
+    },
   };
 }
 
@@ -260,6 +284,7 @@ export function createNoopEmailService(): EmailService {
     async sendLoginNotification() {},
     async sendPasswordChanged() {},
     async sendEmailChangeConfirmation() {},
+    async sendTwoFactorCode() {},
   };
 }
 
@@ -287,6 +312,9 @@ export function createHttpEmailService(baseUrl: string, secret: string): EmailSe
     },
     async sendEmailChangeConfirmation(to, login, confirmUrl) {
       await post("/api/emails/email-change-confirmation", { to, login, confirmUrl });
+    },
+    async sendTwoFactorCode(to, login, code) {
+      await post("/api/emails/two-factor-code", { to, login, code });
     },
   };
 }

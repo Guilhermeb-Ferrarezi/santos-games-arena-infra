@@ -46,6 +46,7 @@ func main() {
 	mux.HandleFunc("POST /api/emails/password-reset", auth(passwordResetHandler))
 	mux.HandleFunc("POST /api/emails/password-changed", auth(passwordChangedHandler))
 	mux.HandleFunc("POST /api/emails/email-change-confirmation", auth(emailChangeConfirmationHandler))
+	mux.HandleFunc("POST /api/emails/two-factor-code", auth(twoFactorCodeHandler))
 
 	// ── Admin API (auth via sessão) ───────────────────────────────────────────
 	mux.HandleFunc("GET /api/admin/stats",          adminAuth(adminStatsHandler))
@@ -167,6 +168,19 @@ func emailChangeConfirmationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	err := send(body.To, "Confirme seu novo e-mail — Santos Games Arena", tmplEmailChangeConfirmation(body.Login, body.ConfirmURL))
 	logAndRespond(w, err, "email-change", body.To, body.Login)
+}
+
+func twoFactorCodeHandler(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		To    string `json:"to"`
+		Login string `json:"login"`
+		Code  string `json:"code"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	err := send(body.To, "Seu código de verificação — Santos Games Arena", tmplTwoFactorCode(body.Login, body.Code))
+	logAndRespond(w, err, "two-factor-code", body.To, body.Login)
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
