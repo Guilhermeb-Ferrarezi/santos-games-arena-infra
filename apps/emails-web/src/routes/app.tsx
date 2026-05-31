@@ -10,13 +10,32 @@ import { ShieldAlert, Loader } from "lucide-react";
 
 const AUTH_URL = import.meta.env.VITE_AUTH_API_URL ?? "https://auth.santos-games.com";
 
+async function getSession(): Promise<any> {
+  const r = await fetch(`${AUTH_URL}/api/auth/session`, { credentials: "include" });
+  return r.ok ? r.json() : null;
+}
+
+async function tryRefresh(): Promise<boolean> {
+  try {
+    const r = await fetch(`${AUTH_URL}/api/auth/refresh`, { method: "POST", credentials: "include" });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchCurrentUser(): Promise<AdminUser | null> {
   try {
-    const res = await fetch(`${AUTH_URL}/api/auth/session`, { credentials: "include" });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.user) return null;
-    // role vem como número: 1 = admin
+    let data = await getSession();
+
+    // JWT expirado mas refresh token ainda válido → renova
+    if (!data?.authenticated) {
+      const ok = await tryRefresh();
+      if (ok) data = await getSession();
+    }
+
+    if (!data?.authenticated || !data.user) return null;
+
     const roleNum: number = data.user.role;
     const role = roleNum === 1 ? "admin" : "user";
     return { id: data.user.id, login: data.user.login, email: data.user.email, role };
