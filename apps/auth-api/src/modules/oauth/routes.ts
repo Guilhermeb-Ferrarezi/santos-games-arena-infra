@@ -190,7 +190,7 @@ export function registerOAuthRoutes(
         });
 
         await dependencies.users.updateLastLogin(user.id);
-        dependencies.emailService?.sendLoginNotification(user.email, user.login, clientIp(request), request.headers["user-agent"] ?? null).catch(() => {});
+        dependencies.emailService?.sendWelcome(user.email, user.login).catch(() => {});
         await recordAuthEvent(dependencies.authEvents, {
           request,
           startedAt,

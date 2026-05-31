@@ -200,6 +200,7 @@ export function registerAuthRoutes(
     }
 
     await users.updateLastLogin(user.id);
+    emailService?.sendWelcome(user.email, user.login).catch(() => {});
     await issueTokens({
       user: { id: user.id, email: user.email, login: user.login, role: user.role },
       request, reply, env, sessions, refreshTokens,

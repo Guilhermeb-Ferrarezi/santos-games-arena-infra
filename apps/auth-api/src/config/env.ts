@@ -29,7 +29,7 @@ const authApiEnvSchema = z.object({
   LOGS_GET_ROUTE_BLACKLIST: commaSeparatedList,
   // Email (Resend)
   RESEND_API_KEY: z.string().trim().optional(),
-  RESEND_FROM_EMAIL: z.string().trim().email().optional(),
+  RESEND_FROM_EMAIL: z.string().trim().optional(), // aceita "Nome <email>" ou só "email"
   APP_BASE_URL: z.string().trim().url().optional(),
   // URL pública da plataforma web (para links de confirmação de e-mail etc.)
   SGA_WEB_URL: z.string().trim().url().optional(),
