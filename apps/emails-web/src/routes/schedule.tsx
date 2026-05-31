@@ -6,8 +6,8 @@ import {
 } from "lucide-react";
 import {
   fetchScheduled, createScheduled, cancelScheduled,
-  fetchTemplates, fetchUsers,
-  type ScheduledEmail, type TemplateMeta, type UserSummary,
+  fetchTemplates, fetchPlatformUsers,
+  type ScheduledEmail, type TemplateMeta, type PlatformUser,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -49,15 +49,15 @@ function UserPicker({
   onSelect,
   onClose,
 }: {
-  onSelect: (u: UserSummary) => void;
+  onSelect: (u: PlatformUser) => void;
   onClose:  () => void;
 }) {
   const [search, setSearch] = useState("");
   const [page,   setPage]   = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["users-picker", page, search],
-    queryFn:  () => fetchUsers({ page, limit: USER_PAGE_LIMIT, search }),
+    queryKey: ["platform-users-picker", page, search],
+    queryFn:  () => fetchPlatformUsers({ page, limit: USER_PAGE_LIMIT, search }),
     placeholderData: (prev) => prev,
   });
 
@@ -269,7 +269,6 @@ function NewScheduleModal({
                     <UserPicker
                       onSelect={(u) => {
                         setTo(u.email);
-                        // Preenche login se existir como variável
                         if (selectedTemplate.vars.find((v) => v.key === "login")) {
                           setVars((p) => ({ ...p, login: u.login }));
                         }

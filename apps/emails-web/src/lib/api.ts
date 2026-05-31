@@ -97,6 +97,26 @@ export function fetchUsers(params: {
   return get(`/api/admin/users?${q}`);
 }
 
+export type PlatformUser = {
+  id: number;
+  login: string;
+  email: string;
+  avatarUrl?: string;
+};
+
+export function fetchPlatformUsers(params: {
+  page: number;
+  limit?: number;
+  search?: string;
+}): Promise<Paginated<PlatformUser>> {
+  const q = new URLSearchParams({
+    page: String(params.page),
+    limit: String(params.limit ?? 10),
+    search: params.search ?? "",
+  });
+  return get(`/api/admin/platform-users?${q}`);
+}
+
 export function fetchTemplates(): Promise<TemplateMeta[]> {
   return get("/api/admin/templates");
 }

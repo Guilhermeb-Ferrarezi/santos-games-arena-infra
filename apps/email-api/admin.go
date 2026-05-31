@@ -194,6 +194,68 @@ func adminUsersHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, PaginatedUsers{Data: data, Total: total, Page: page, Limit: limit, Pages: pages})
 }
 
+// ── Platform users (Postgres) ────────────────────────────────────────────────
+
+type PlatformUser struct {
+	ID        int     `json:"id"`
+	Login     string  `json:"login"`
+	Email     string  `json:"email"`
+	AvatarURL *string `json:"avatarUrl,omitempty"`
+}
+
+type PaginatedPlatformUsers struct {
+	Data  []PlatformUser `json:"data"`
+	Total int            `json:"total"`
+	Page  int            `json:"page"`
+	Limit int            `json:"limit"`
+	Pages int            `json:"pages"`
+}
+
+func adminPlatformUsersHandler(w http.ResponseWriter, r *http.Request) {
+	if pgPool == nil {
+		writeJSON(w, 503, map[string]string{"error": "postgres not configured"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	page   := queryInt(r, "page", 1)
+	limit  := queryInt(r, "limit", 10)
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+
+	pattern := "%" + search + "%"
+
+	var total int
+	countQ := `SELECT COUNT(*) FROM "User" WHERE is_active = true AND (login ILIKE $1 OR email ILIKE $1)`
+	if err := pgPool.QueryRow(ctx, countQ, pattern).Scan(&total); err != nil {
+		writeJSON(w, 500, map[string]string{"error": "db_error"})
+		return
+	}
+
+	rows, err := pgPool.Query(ctx,
+		`SELECT id, login, email, avatar_url FROM "User"
+		 WHERE is_active = true AND (login ILIKE $1 OR email ILIKE $1)
+		 ORDER BY login ASC LIMIT $2 OFFSET $3`,
+		pattern, limit, (page-1)*limit,
+	)
+	if err != nil {
+		writeJSON(w, 500, map[string]string{"error": "db_error"})
+		return
+	}
+	defer rows.Close()
+
+	users := []PlatformUser{}
+	for rows.Next() {
+		var u PlatformUser
+		if err := rows.Scan(&u.ID, &u.Login, &u.Email, &u.AvatarURL); err == nil {
+			users = append(users, u)
+		}
+	}
+
+	pages := int(math.Ceil(float64(total) / float64(limit)))
+	writeJSON(w, 200, PaginatedPlatformUsers{Data: users, Total: total, Page: page, Limit: limit, Pages: pages})
+}
+
 // ── Templates ────────────────────────────────────────────────────────────────
 
 type TemplateVar struct {

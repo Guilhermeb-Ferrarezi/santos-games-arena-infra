@@ -48,7 +48,8 @@ func main() {
 	mux.HandleFunc("POST /api/emails/email-change-confirmation", auth(emailChangeConfirmationHandler))
 
 	// ── Admin API (auth via sessão) ───────────────────────────────────────────
-	mux.HandleFunc("GET /api/admin/stats", adminAuth(adminStatsHandler))
+	mux.HandleFunc("GET /api/admin/stats",          adminAuth(adminStatsHandler))
+	mux.HandleFunc("GET /api/admin/platform-users", adminAuth(adminPlatformUsersHandler))
 	mux.HandleFunc("GET /api/admin/logs", adminAuth(adminLogsHandler))
 	mux.HandleFunc("GET /api/admin/users", adminAuth(adminUsersHandler))
 	mux.HandleFunc("GET /api/admin/templates",                  adminAuth(adminTemplatesHandler))

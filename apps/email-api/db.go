@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -17,9 +18,10 @@ const (
 )
 
 var (
-	emailLogs      *mongo.Collection
-	scheduledColl  *mongo.Collection
-	templatesColl  *mongo.Collection
+	emailLogs     *mongo.Collection
+	scheduledColl *mongo.Collection
+	templatesColl *mongo.Collection
+	pgPool        *pgxpool.Pool
 )
 
 func initDB(ctx context.Context) {
@@ -38,6 +40,20 @@ func initDB(ctx context.Context) {
 	scheduledColl = db.Collection("sga_email_scheduled")
 	templatesColl = db.Collection("sga_email_templates")
 	slog.Info("mongo connected", "db", dbName)
+
+	if pgURL := os.Getenv("POSTGRES_URL"); pgURL != "" {
+		pool, err := pgxpool.New(ctx, pgURL)
+		if err != nil {
+			slog.Error("postgres connect failed", "err", err)
+			os.Exit(1)
+		}
+		if err := pool.Ping(ctx); err != nil {
+			slog.Error("postgres ping failed", "err", err)
+			os.Exit(1)
+		}
+		pgPool = pool
+		slog.Info("postgres connected")
+	}
 }
 
 // EmailLogDoc segue o padrão de logs HTTP da infraestrutura.
