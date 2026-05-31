@@ -16,7 +16,10 @@ async function fetchCurrentUser(): Promise<AdminUser | null> {
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.user) return null;
-    return { id: data.user.id, login: data.user.login, email: data.user.email, role: data.user.role ?? "user" };
+    // role vem como número: 1 = admin
+    const roleNum: number = data.user.role;
+    const role = roleNum === 1 ? "admin" : "user";
+    return { id: data.user.id, login: data.user.login, email: data.user.email, role };
   } catch {
     return null;
   }
