@@ -11,15 +11,18 @@ type AuthSessionResponse = {
   needsPasswordSetup?: boolean;
 };
 
-const loginResponseSchema = z.object({
-  authenticated: z.literal(true),
-  user: z.object({
-    id: z.number(),
-    email: z.string(),
-    login: z.string()
+const loginResponseSchema = z.union([
+  z.object({
+    authenticated: z.literal(true),
+    user: z.object({ id: z.number(), email: z.string(), login: z.string() }),
+    redirectUri: z.string().url().optional(),
   }),
-  redirectUri: z.string().url().optional()
-});
+  z.object({
+    requires2fa: z.literal(true),
+    twoFactorToken: z.string(),
+    redirectUri: z.string().url().optional(),
+  }),
+]);
 
 const passwordResponseSchema = z.object({
   success: z.literal(true),
