@@ -15,7 +15,7 @@ import type { ExternalAuthAccountRepository } from "../oauth/external-auth-accou
 import { isOAuthProvider } from "../oauth/providers";
 import { verifySessionToken } from "../session/session-token";
 import type { EmailService } from "../email/email-service";
-import { verifyTotpCode, verifyBackupCode, generateEmailOtp, hashEmailOtp } from "../totp/totp";
+import { verifyTotpCode, verifyBackupCode, generateEmailOtp, hashEmailOtp, safeCompareHex, consumeOtpAttempt } from "../totp/totp";
 
 const clientFlowFields = {
   clientId: z.string().trim().min(1).optional(),
@@ -359,8 +359,11 @@ export function registerAuthRoutes(
 
     if (method === "email") {
       if (!otpHash) return reply.code(400).send({ error: "invalid_token" });
-      const inputHash = hashEmailOtp(code.slice(0, 6));
-      verified = inputHash === otpHash;
+      const status = await consumeOtpAttempt(redis, redisKey);
+      if (status === "locked") {
+        return reply.code(429).send({ error: "too_many_attempts", message: "Muitas tentativas. Faça login novamente." });
+      }
+      verified = safeCompareHex(hashEmailOtp(code.slice(0, 6)), otpHash);
     } else {
       if (!user.totpSecret) return reply.code(400).send({ error: "invalid_token" });
       if (/^\d{6}$/.test(code)) {
@@ -404,19 +407,36 @@ export function registerAuthRoutes(
     if (!redis) return reply.code(503).send({ error: "service_unavailable" });
 
     const redisKey = `auth:2fa:pending:${body.data.twoFactorToken}`;
-    const raw = await redis.get(redisKey);
-    if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Token expirado." });
+    const [raw, ttl] = await Promise.all([redis.get(redisKey), redis.ttl(redisKey)]);
+    if (!raw || ttl <= 0) return reply.code(400).send({ error: "invalid_token", message: "Token expirado." });
 
-    const { userId, method } = JSON.parse(raw) as { userId: number; method?: string };
-    if (method !== "email") return reply.code(400).send({ error: "wrong_method" });
+    const parsed = JSON.parse(raw) as {
+      userId: number; method?: string; otpHash?: string;
+      resendCount?: number; lastResend?: number;
+    };
+    if (parsed.method !== "email") return reply.code(400).send({ error: "wrong_method" });
 
-    const user = await users.findById(userId);
+    const resendCount = parsed.resendCount ?? 0;
+    if (resendCount >= 3) {
+      return reply.code(429).send({ error: "too_many_resends", message: "Limite de reenvios atingido." });
+    }
+    const now = Date.now();
+    if (parsed.lastResend && (now - parsed.lastResend) < 30_000) {
+      return reply.code(429).send({ error: "resend_too_soon", message: "Aguarde 30 segundos antes de reenviar." });
+    }
+
+    const user = await users.findById(parsed.userId);
     if (!user) return reply.code(400).send({ error: "invalid_token" });
     if (!emailService) return reply.code(503).send({ error: "service_unavailable" });
 
     const otp = generateEmailOtp();
     const otpHash = hashEmailOtp(otp);
-    await redis.set(redisKey, JSON.stringify({ userId, method: "email", otpHash }), "EX", 300);
+    await redis.set(
+      redisKey,
+      JSON.stringify({ userId: parsed.userId, method: "email", otpHash, resendCount: resendCount + 1, lastResend: now }),
+      "EX", ttl, // preserva TTL original
+    );
+    await redis.del(`${redisKey}:attempts`);
     emailService.sendTwoFactorCode(user.email, user.login, otp).catch(() => {});
 
     return { ok: true };

@@ -10,7 +10,7 @@ import { verifyPassword } from "../auth/password";
 import {
   generateTotpSecret, getTotpUri, verifyTotpCode,
   generateBackupCodes, hashBackupCode, verifyBackupCode,
-  generateEmailOtp, hashEmailOtp, maskEmail,
+  generateEmailOtp, hashEmailOtp, maskEmail, safeCompareHex, consumeOtpAttempt,
 } from "./totp";
 
 type Env = Pick<AuthApiEnv, "AUTH_COOKIE_NAME" | "JWT_SECRET">;
@@ -82,9 +82,16 @@ export function registerTotpRoutes(
     if (user.totpEnabled) return reply.code(409).send({ error: "2fa_already_enabled" });
     if (!redis || !emailService) return reply.code(503).send({ error: "service_unavailable" });
 
+    const otpKey = `auth:2fa:setup:email:${user.id}`;
+    const existingTtl = await redis.ttl(otpKey);
+    if (existingTtl > 570) {
+      return reply.code(429).send({ error: "send_too_soon", message: "Aguarde 30 segundos antes de solicitar um novo código." });
+    }
+
     const otp = generateEmailOtp();
     const otpHash = hashEmailOtp(otp);
-    await redis.set(`auth:2fa:setup:email:${user.id}`, otpHash, "EX", 600);
+    await redis.set(otpKey, otpHash, "EX", 600);
+    await redis.del(`${otpKey}:attempts`);
     emailService.sendTwoFactorCode(user.email, user.login, otp).catch(() => {});
 
     return { ok: true, email: maskEmail(user.email) };
@@ -100,14 +107,20 @@ export function registerTotpRoutes(
     if (user.totpEnabled) return reply.code(409).send({ error: "2fa_already_enabled" });
     if (!redis) return reply.code(503).send({ error: "service_unavailable" });
 
-    const storedHash = await redis.get(`auth:2fa:setup:email:${user.id}`);
+    const otpKey = `auth:2fa:setup:email:${user.id}`;
+    const storedHash = await redis.get(otpKey);
     if (!storedHash) return reply.code(400).send({ error: "code_expired", message: "Código expirado. Solicite um novo." });
 
-    if (hashEmailOtp(body.data.code) !== storedHash) {
+    const status = await consumeOtpAttempt(redis, otpKey);
+    if (status === "locked") {
+      return reply.code(429).send({ error: "too_many_attempts", message: "Muitas tentativas. Solicite um novo código." });
+    }
+
+    if (!safeCompareHex(hashEmailOtp(body.data.code), storedHash)) {
       return reply.code(400).send({ error: "invalid_code", message: "Código inválido." });
     }
 
-    await redis.del(`auth:2fa:setup:email:${user.id}`);
+    await redis.del(otpKey, `${otpKey}:attempts`);
     await users.enableTotpEmail(user.id);
 
     return { success: true };
@@ -139,11 +152,17 @@ export function registerTotpRoutes(
           }
         }
       } else if (user.totpMethod === "email" && redis) {
-        // Para 2FA por e-mail, verificar OTP de disable (armazenado como setup:email:disable:{id})
-        const storedHash = await redis.get(`auth:2fa:disable:email:${user.id}`);
-        if (storedHash && hashEmailOtp(code) === storedHash) {
-          await redis.del(`auth:2fa:disable:email:${user.id}`);
-          verified = true;
+        const disableKey = `auth:2fa:disable:email:${user.id}`;
+        const storedHash = await redis.get(disableKey);
+        if (storedHash) {
+          const status = await consumeOtpAttempt(redis, disableKey);
+          if (status === "locked") {
+            return reply.code(429).send({ error: "too_many_attempts", message: "Muitas tentativas. Solicite um novo código." });
+          }
+          if (safeCompareHex(hashEmailOtp(code), storedHash)) {
+            await redis.del(disableKey, `${disableKey}:attempts`);
+            verified = true;
+          }
         }
       }
     } else if (password) {
@@ -171,9 +190,16 @@ export function registerTotpRoutes(
     }
     if (!redis || !emailService) return reply.code(503).send({ error: "service_unavailable" });
 
+    const disableKey = `auth:2fa:disable:email:${user.id}`;
+    const existingTtl = await redis.ttl(disableKey);
+    if (existingTtl > 570) {
+      return reply.code(429).send({ error: "send_too_soon", message: "Aguarde 30 segundos antes de solicitar um novo código." });
+    }
+
     const otp = generateEmailOtp();
     const otpHash = hashEmailOtp(otp);
-    await redis.set(`auth:2fa:disable:email:${user.id}`, otpHash, "EX", 600);
+    await redis.set(disableKey, otpHash, "EX", 600);
+    await redis.del(`${disableKey}:attempts`);
     emailService.sendTwoFactorCode(user.email, user.login, otp).catch(() => {});
 
     return { ok: true, email: maskEmail(user.email) };

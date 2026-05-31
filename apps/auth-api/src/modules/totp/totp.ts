@@ -1,5 +1,5 @@
 import { OTP } from "otplib";
-import { createHash, randomBytes, randomInt } from "crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "crypto";
 
 const otp = new OTP();
 
@@ -42,6 +42,26 @@ export function maskEmail(email: string): string {
   const [local, domain] = email.split("@");
   const visible = local.slice(0, 2);
   return `${visible}***@${domain}`;
+}
+
+export function safeCompareHex(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
+}
+
+export async function consumeOtpAttempt(
+  redis: import("ioredis").Redis,
+  otpKey: string,
+  maxAttempts = 5,
+): Promise<"ok" | "locked"> {
+  const attemptsKey = `${otpKey}:attempts`;
+  const count = await redis.incr(attemptsKey);
+  await redis.expire(attemptsKey, 600);
+  if (count > maxAttempts) {
+    await redis.del(otpKey, attemptsKey);
+    return "locked";
+  }
+  return "ok";
 }
 
 export function verifyBackupCode(raw: string, hashes: string[]): { valid: boolean; remaining: string[] } {
