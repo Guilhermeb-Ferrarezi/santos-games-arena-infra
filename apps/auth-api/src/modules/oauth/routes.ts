@@ -14,6 +14,7 @@ import { needsPasswordSetup } from "../auth/password";
 import type { AuthEventLogger } from "../logs/auth-event-logger";
 import type { AuthClientRepository } from "../clients/client-repository";
 import { resolveClientRedirect } from "../clients/validate-redirect";
+import type { EmailService } from "../email/email-service";
 
 export function registerOAuthRoutes(
   server: FastifyInstance,
@@ -40,8 +41,15 @@ export function registerOAuthRoutes(
     authEvents?: AuthEventLogger;
     authClients?: AuthClientRepository;
     refreshTokens?: RefreshTokenRepository;
+    emailService?: EmailService;
   }
 ) {
+  function clientIp(req: Parameters<Parameters<typeof server.get>[1]>[0]): string | null {
+    const fwd = req.headers["x-forwarded-for"];
+    if (typeof fwd === "string") return fwd.split(",")[0]?.trim() ?? null;
+    return (req as any).ip ?? null;
+  }
+
   server.get("/oauth/:provider/start", async (request, reply) => {
     const { provider } = request.params as { provider: string };
     const query = request.query as {
@@ -182,6 +190,7 @@ export function registerOAuthRoutes(
         });
 
         await dependencies.users.updateLastLogin(user.id);
+        dependencies.emailService?.sendLoginNotification(user.email, user.login, clientIp(request), request.headers["user-agent"] ?? null).catch(() => {});
         await recordAuthEvent(dependencies.authEvents, {
           request,
           startedAt,
@@ -224,6 +233,7 @@ export function registerOAuthRoutes(
 
     if (needsPasswordSetup(user.passwordHash)) {
       await dependencies.users.updateLastLogin(user.id);
+      dependencies.emailService?.sendLoginNotification(user.email, user.login, clientIp(request), request.headers["user-agent"] ?? null).catch(() => {});
       await recordAuthEvent(dependencies.authEvents, {
         request,
         startedAt,
@@ -262,6 +272,7 @@ export function registerOAuthRoutes(
     }
 
     await dependencies.users.updateLastLogin(user.id);
+    dependencies.emailService?.sendLoginNotification(user.email, user.login, clientIp(request), request.headers["user-agent"] ?? null).catch(() => {});
     await recordAuthEvent(dependencies.authEvents, {
       request,
       startedAt,

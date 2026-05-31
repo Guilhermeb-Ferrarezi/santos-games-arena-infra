@@ -145,7 +145,7 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
         ACCESS_TOKEN_TTL_SECONDS: env.ACCESS_TOKEN_TTL_SECONDS,
         REFRESH_TOKEN_TTL_SECONDS: env.REFRESH_TOKEN_TTL_SECONDS,
         STEAM_API_KEY: env.STEAM_API_KEY
-      }, { externalAccounts, oauthClient, sessions, users, authEvents: resolvedAuthEvents, authClients, refreshTokens });
+      }, { externalAccounts, oauthClient, sessions, users, authEvents: resolvedAuthEvents, authClients, refreshTokens, emailService });
     }, { prefix: AUTH_PREFIX });
   }
 
