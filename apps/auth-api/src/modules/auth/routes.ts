@@ -357,4 +357,66 @@ export function registerAuthRoutes(
       },
     };
   });
+
+  // ─── Alteração de e-mail ──────────────────────────────────────────────────
+
+  // POST /change-email/request — solicita troca; envia e-mail de confirmação para o novo endereço
+  server.post("/change-email/request", async (request, reply) => {
+    const parsed = z.object({
+      newEmail: z.string().trim().email(),
+      password: z.string().min(1),
+    }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+
+    const token = (request.cookies as Record<string, string>)[env.AUTH_COOKIE_NAME];
+    if (!token) return reply.code(401).send({ error: "unauthorized" });
+    const session = await verifySessionToken(token, env);
+    if (!session) return reply.code(401).send({ error: "unauthorized" });
+
+    const user = await users.findById(session.userId);
+    if (!user) return reply.code(401).send({ error: "unauthorized" });
+
+    const ok = await verifyPassword(parsed.data.password, user.passwordHash, env as any);
+    if (!ok) return reply.code(400).send({ error: "invalid_password", message: "Senha incorreta." });
+
+    const normalizedNew = parsed.data.newEmail.toLowerCase();
+    if (normalizedNew === user.email.toLowerCase()) {
+      return reply.code(400).send({ error: "same_email", message: "O novo e-mail é igual ao atual." });
+    }
+
+    const existing = await users.findByIdentifier(normalizedNew).catch(() => null);
+    if (existing) return reply.code(409).send({ error: "email_taken", message: "Este e-mail já está em uso." });
+
+    if (!redis || !emailService) {
+      return reply.code(503).send({ error: "service_unavailable" });
+    }
+
+    const confirmToken = randomUUID();
+    const redisKey = `auth:email-change:${confirmToken}`;
+    await redis.set(redisKey, JSON.stringify({ userId: user.id, newEmail: normalizedNew }), "EX", 60 * 30);
+
+    const sgaWebBase = (env as any).SGA_WEB_URL ?? "https://prime.santos-games.com";
+    const confirmUrl = `${sgaWebBase}/settings?confirm-email=${confirmToken}`;
+    await emailService.sendEmailChangeConfirmation(normalizedNew, user.login, confirmUrl);
+
+    return { success: true };
+  });
+
+  // POST /change-email/confirm — confirma a troca pelo token recebido no e-mail
+  server.post("/change-email/confirm", async (request, reply) => {
+    const parsed = z.object({ token: z.string().min(1) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+
+    if (!redis) return reply.code(503).send({ error: "service_unavailable" });
+
+    const redisKey = `auth:email-change:${parsed.data.token}`;
+    const raw = await redis.get(redisKey);
+    if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Link expirado ou inválido." });
+
+    const { userId, newEmail } = JSON.parse(raw) as { userId: number; newEmail: string };
+    await redis.del(redisKey);
+    await users.updateEmail(userId, newEmail);
+
+    return { success: true, newEmail };
+  });
 }

@@ -21,6 +21,7 @@ export type EmailService = {
   sendPasswordReset(to: string, resetUrl: string): Promise<void>;
   sendLoginNotification(to: string, login: string, ip: string | null, userAgent: string | null): Promise<void>;
   sendPasswordChanged(to: string, login: string): Promise<void>;
+  sendEmailChangeConfirmation(to: string, login: string, confirmUrl: string): Promise<void>;
 };
 
 export function createEmailService(apiKey: string, fromEmail: string, appBaseUrl?: string): EmailService {
@@ -68,6 +69,24 @@ export function createEmailService(apiKey: string, fromEmail: string, appBaseUrl
       `));
     },
 
+    async sendEmailChangeConfirmation(to, login, confirmUrl) {
+      const safeHref = esc(confirmUrl);
+      await send(to, "Confirme a alteração de e-mail — Santos Games Arena", wrap(`
+        <h2 style="font-size:18px;font-weight:700;margin:24px 0 8px">Confirme a alteração de e-mail</h2>
+        <p style="color:rgba(255,255,255,0.6);font-size:14px;line-height:1.6;margin:0 0 16px">
+          Recebemos uma solicitação para alterar o e-mail da conta <strong style="color:#fff">${esc(login)}</strong>
+          para este endereço. Clique no botão abaixo para confirmar.
+          O link é válido por <strong style="color:#fff">30 minutos</strong>.
+        </p>
+        <a href="${safeHref}" style="display:inline-block;background:#f86d83;color:#fff;text-decoration:none;padding:12px 28px;font-weight:900;font-size:13px;text-transform:uppercase;letter-spacing:2px">
+          Confirmar novo e-mail
+        </a>
+        <p style="color:rgba(255,255,255,0.3);font-size:12px;margin-top:24px">
+          Se você não solicitou isso, ignore este e-mail. Nenhuma alteração será feita.
+        </p>
+      `));
+    },
+
     async sendPasswordChanged(to, login) {
       await send(to, "Senha alterada — Santos Games Arena", wrap(`
         <h2 style="font-size:18px;font-weight:700;margin:24px 0 8px">Senha alterada com sucesso</h2>
@@ -87,5 +106,6 @@ export function createNoopEmailService(): EmailService {
     async sendPasswordReset() {},
     async sendLoginNotification() {},
     async sendPasswordChanged() {},
+    async sendEmailChangeConfirmation() {},
   };
 }

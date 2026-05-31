@@ -31,6 +31,8 @@ const authApiEnvSchema = z.object({
   RESEND_API_KEY: z.string().trim().optional(),
   RESEND_FROM_EMAIL: z.string().trim().email().optional(),
   APP_BASE_URL: z.string().trim().url().optional(),
+  // URL pública da plataforma web (para links de confirmação de e-mail etc.)
+  SGA_WEB_URL: z.string().trim().url().optional(),
   // Cloudflare R2
   R2_ENDPOINT: z.string().trim().url().optional(),
   R2_ACCESS_KEY_ID: z.string().trim().optional(),

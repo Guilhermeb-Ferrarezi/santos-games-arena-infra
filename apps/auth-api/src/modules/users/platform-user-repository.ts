@@ -26,6 +26,7 @@ export type PlatformUserRepository = {
     email: string; login: string; provider: OAuthProvider; externalAccountId: string;
   }): Promise<PlatformUser>;
   updatePassword(userId: number, passwordHash: string): Promise<void>;
+  updateEmail(userId: number, email: string): Promise<void>;
   updateLastLogin(userId: number): Promise<void>;
   updateAvatarUrl(userId: number, avatarUrl: string): Promise<void>;
   enableTotp(userId: number, secret: string, backupCodeHashes: string[]): Promise<void>;
@@ -120,6 +121,10 @@ export function createPlatformUserRepository(client: PostgresClient): PlatformUs
 
     async updatePassword(userId, passwordHash) {
       await client`update "User" set password_hash = ${passwordHash}, updated_at = now() where id = ${userId}`;
+    },
+
+    async updateEmail(userId, email) {
+      await client`update "User" set email = ${email}, updated_at = now() where id = ${userId}`;
     },
 
     async updateAvatarUrl(userId, avatarUrl) {

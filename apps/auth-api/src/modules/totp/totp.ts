@@ -1,19 +1,19 @@
-import { TOTP, generateSecret } from "otplib";
+import { OTP } from "otplib";
 import { createHash, randomBytes } from "crypto";
 
-const totp = new TOTP({ step: 30, window: 1 });
+const otp = new OTP();
 
 export function generateTotpSecret(): string {
-  return generateSecret(20);
+  return otp.generateSecret(20);
 }
 
 export function getTotpUri(secret: string, login: string, issuer = "Santos Games Arena"): string {
-  return totp.createUri({ account: login, issuer, secret });
+  return otp.generateURI({ label: login, issuer, secret });
 }
 
 export function verifyTotpCode(code: string, secret: string): boolean {
   try {
-    return totp.verify({ token: code, secret });
+    return otp.verifySync({ token: code, secret }).valid;
   } catch {
     return false;
   }
