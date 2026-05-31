@@ -3,9 +3,10 @@ FROM oven/bun:1-alpine AS frontend
 WORKDIR /web
 COPY apps/emails-web/package.json ./
 RUN bun install
-COPY apps/emails-web/ .
-ARG VITE_AUTH_API_URL=https://auth.santos-games.com
-ENV VITE_AUTH_API_URL=$VITE_AUTH_API_URL
+COPY apps/emails-web/src ./src
+COPY apps/emails-web/index.html ./index.html
+COPY apps/emails-web/vite.config.ts ./vite.config.ts
+COPY apps/emails-web/tsconfig.json ./tsconfig.json
 RUN bun run build
 
 # Stage 2: Build email-api (Go)
@@ -13,7 +14,7 @@ FROM golang:1.23-alpine AS builder
 WORKDIR /app
 COPY apps/email-api/go.mod apps/email-api/go.sum ./
 RUN go mod download
-COPY apps/email-api/ .
+COPY apps/email-api/main.go apps/email-api/templates.go ./
 COPY --from=frontend /web/dist ./dist
 RUN CGO_ENABLED=0 GOOS=linux go build -o email-api .
 
