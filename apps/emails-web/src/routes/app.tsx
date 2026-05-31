@@ -49,7 +49,11 @@ function AppShell() {
   }
 
   if (status === "unauth") {
-    window.location.href = `${AUTH_URL}?redirect=${encodeURIComponent(window.location.href)}`;
+    const params = new URLSearchParams({
+      client_id: "sga-emails-web",
+      redirect_uri: window.location.origin,
+    });
+    window.location.href = `${AUTH_URL}?${params}`;
     return null;
   }
 
