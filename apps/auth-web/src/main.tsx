@@ -10,23 +10,16 @@ const queryClient = new QueryClient();
 const rootRoute = createRootRoute({
   component: () => <AuthApp />
 });
-const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/",
-  component: () => <AuthApp />
-});
-const registerRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/register",
-  component: () => <AuthApp />
-});
-const setPasswordRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/set-password",
-  component: () => <AuthApp />
-});
+const makeRoute = (path: string) => createRoute({ getParentRoute: () => rootRoute, path, component: () => <AuthApp /> });
 const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, registerRoute, setPasswordRoute])
+  routeTree: rootRoute.addChildren([
+    makeRoute("/"),
+    makeRoute("/register"),
+    makeRoute("/set-password"),
+    makeRoute("/2fa"),
+    makeRoute("/forgot-password"),
+    makeRoute("/reset-password"),
+  ])
 });
 
 declare module "@tanstack/react-router" {
