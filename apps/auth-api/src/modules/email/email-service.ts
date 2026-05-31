@@ -34,7 +34,7 @@ function emailLayout(content: string): string {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="vertical-align:middle;">
-                    <img src="https://cdn.santos-games.com/emails/favicon.png" alt="SGA" width="32" height="32" style="display:inline-block;width:32px;height:32px;border-radius:6px;vertical-align:middle;margin-right:10px;" /><span style="font-size:13px;font-weight:900;letter-spacing:3px;text-transform:uppercase;color:#ffffff;vertical-align:middle;">SANTOS<span style="color:#f86d83;">.</span>GAMES</span>
+                    <img src="https://cdn.santos-games.com/emails/sga-logo.png" alt="Santos Games Arena" height="26" style="display:block;height:26px;width:auto;" />
                   </td>
                   <td align="right" style="vertical-align:middle;">
                     <span style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.25);">ARENA</span>
@@ -55,7 +55,7 @@ function emailLayout(content: string): string {
           <tr>
             <td style="padding-top:24px;text-align:center;">
               <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);letter-spacing:1px;">
-                © 2025 Santos Games Arena · santos-games.com
+                © 2026 Santos Games Arena · santos-games.com
               </p>
               <p style="margin:8px 0 0;font-size:11px;color:rgba(255,255,255,0.15);">
                 Este e-mail foi enviado para você porque sua conta realizou uma ação na plataforma.
