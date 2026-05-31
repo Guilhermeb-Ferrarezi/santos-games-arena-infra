@@ -13,7 +13,7 @@ import {
   hashRefreshToken,
 } from "./refresh-token";
 import type { RefreshTokenRepository } from "./refresh-token-repository";
-import type { SessionStore } from "./session-store";
+import { createSessionId, type SessionStore } from "./session-store";
 import { createSessionToken, verifySessionToken } from "./session-token";
 
 type SessionEnv = Pick<
@@ -143,12 +143,20 @@ export function registerSessionRoutes(
       });
 
       const accessTtl = env.ACCESS_TOKEN_TTL_SECONDS ?? 900;
+
+      // Cria nova sessão no Redis para que GET /session valide o sessionId
+      const sessionId = createSessionId();
+      if (sessions) {
+        await sessions.create({ sessionId, userId: user.id, ttlSeconds: refreshTtl });
+      }
+
       const accessToken = await createSessionToken(
         {
           userId: user.id,
           email: user.email,
           login: user.login,
           role: user.role,
+          sessionId,
         },
         { JWT_SECRET: env.JWT_SECRET, SESSION_TTL_SECONDS: accessTtl },
       );
@@ -173,7 +181,7 @@ export function registerSessionRoutes(
 
       return {
         authenticated: true,
-        user: { id: user.id, email: user.email, login: user.login },
+        user: { id: user.id, email: user.email, login: user.login, role: user.role },
       };
     });
 
