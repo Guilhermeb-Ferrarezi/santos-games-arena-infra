@@ -17,10 +17,19 @@ export type UserSummary = {
   lastEmailType: EmailLog["emailType"];
 };
 
+export type TemplateVar = { key: string; label: string; default: string };
+
 export type TemplateMeta = {
+  id?: string;
   name: string;
   label: string;
-  vars: { key: string; label: string; default: string }[];
+  subject?: string;
+  body?: string;
+  vars: TemplateVar[];
+  isSystem: boolean;
+  schedulable: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Stats = {
@@ -94,11 +103,28 @@ export function fetchTemplates(): Promise<TemplateMeta[]> {
 
 export function fetchTemplatePreviewUrl(name: string, vars: Record<string, string>): string {
   const q = new URLSearchParams(vars);
-  return `/api/admin/templates/${name}?${q}`;
+  return `/api/admin/templates/${name}/preview?${q}`;
 }
 
 export function testTemplate(name: string, body: Record<string, string>): Promise<{ ok: boolean }> {
   return post(`/api/admin/templates/${name}/test`, body);
+}
+
+export function createTemplate(t: Pick<TemplateMeta, "name"|"label"|"subject"|"body"|"vars">): Promise<TemplateMeta> {
+  return post("/api/admin/templates", t);
+}
+
+export function updateTemplate(name: string, t: Pick<TemplateMeta, "label"|"subject"|"body"|"vars">): Promise<{ ok: boolean }> {
+  return fetch(`/api/admin/templates/${name}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(t),
+  }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
+}
+
+export async function deleteTemplate(name: string): Promise<void> {
+  const r = await fetch(`/api/admin/templates/${name}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(String(r.status));
 }
 
 // ── Agendamentos ─────────────────────────────────────────────────────────────

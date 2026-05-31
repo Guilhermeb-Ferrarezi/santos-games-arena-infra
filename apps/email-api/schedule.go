@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -67,7 +68,21 @@ func renderTemplate(name string, vars map[string]string) (subject, html string, 
 		subject = "Confirme seu novo e-mail — Santos Games Arena"
 		html = tmplEmailChangeConfirmation(login, confirmURL)
 	default:
-		err = fmt.Errorf("template %q não encontrado", name)
+		// Tentar template customizado no banco
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var t TemplateMeta
+		if dbErr := templatesColl.FindOne(ctx, bson.M{"name": name}).Decode(&t); dbErr != nil {
+			err = fmt.Errorf("template %q não encontrado", name)
+			return
+		}
+		subject = t.Subject
+		body := t.Body
+		for k, v := range vars {
+			body    = strings.ReplaceAll(body,    "{"+k+"}", v)
+			subject = strings.ReplaceAll(subject, "{"+k+"}", v)
+		}
+		html = body
 	}
 	return
 }

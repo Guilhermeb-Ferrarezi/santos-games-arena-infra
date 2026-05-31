@@ -19,6 +19,7 @@ const (
 var (
 	emailLogs      *mongo.Collection
 	scheduledColl  *mongo.Collection
+	templatesColl  *mongo.Collection
 )
 
 func initDB(ctx context.Context) {
@@ -33,8 +34,9 @@ func initDB(ctx context.Context) {
 		os.Exit(1)
 	}
 	db := client.Database(dbName)
-	emailLogs = db.Collection(collectionName)
+	emailLogs     = db.Collection(collectionName)
 	scheduledColl = db.Collection("sga_email_scheduled")
+	templatesColl = db.Collection("sga_email_templates")
 	slog.Info("mongo connected", "db", dbName)
 }
 
