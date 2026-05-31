@@ -77,6 +77,8 @@ export function registerSessionRoutes(
         login: session.login,
         role: session.role,
         createdAt: user?.createdAt?.toISOString() ?? null,
+        totpEnabled: user?.totpEnabled ?? false,
+        avatarUrl: user?.avatarUrl ?? null,
       },
       needsPasswordSetup: user ? needsPasswordSetup(user.passwordHash) : false,
     };
