@@ -79,8 +79,8 @@ func renderTemplate(name string, vars map[string]string) (subject, html string, 
 		subject = t.Subject
 		body := t.Body
 		for k, v := range vars {
-			body    = strings.ReplaceAll(body,    "{"+k+"}", v)
-			subject = strings.ReplaceAll(subject, "{"+k+"}", v)
+			body    = strings.ReplaceAll(body,    "{"+k+"}", esc(v))
+			subject = strings.ReplaceAll(subject, "{"+k+"}", v) // assunto: sem escaping HTML
 		}
 		html = body
 	}

@@ -332,14 +332,19 @@ func adminTemplatePreviewHandler(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 404, map[string]string{"error": "template_not_found"})
 			return
 		}
-		html = t.Body
+		bodyHTML := t.Body
 		for _, v := range t.Vars {
-			val := q.Get(v.Key); if val == "" { val = v.Default }
-			html = strings.ReplaceAll(html, "{"+v.Key+"}", val)
+			val := q.Get(v.Key)
+			if val == "" {
+				val = v.Default
+			}
+			bodyHTML = strings.ReplaceAll(bodyHTML, "{"+v.Key+"}", esc(val))
 		}
+		html = bodyHTML
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(200)
 	w.Write([]byte(html))
 }
