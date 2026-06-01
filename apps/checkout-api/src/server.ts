@@ -41,8 +41,12 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
     secret: env?.JWT_SECRET
   });
 
+  // In production, deny all cross-origin credentialed requests when no explicit
+  // origin allowlist is configured. Falling back to `true` (allow any) with
+  // credentials:true would let arbitrary sites read authenticated responses.
+  const corsOrigin = env?.CORS_ORIGINS?.length ? env.CORS_ORIGINS : env?.NODE_ENV !== "production";
   server.register(cors, {
-    origin: env?.CORS_ORIGINS?.length ? env.CORS_ORIGINS : true,
+    origin: corsOrigin,
     credentials: true
   });
 

@@ -47,7 +47,12 @@ export function createAuthApiServer(options: AuthApiServerOptions = {}) {
   const server = Fastify({ logger: env?.NODE_ENV === "production" });
 
   server.register(cookie, { secret: env?.JWT_SECRET });
-  server.register(cors, { origin: env?.CORS_ORIGINS?.length ? env.CORS_ORIGINS : true, credentials: true });
+
+  // In production, deny all cross-origin credentialed requests when no explicit
+  // origin allowlist is configured. Falling back to `true` (allow any) with
+  // credentials:true would let arbitrary sites read authenticated responses.
+  const corsOrigin = env?.CORS_ORIGINS?.length ? env.CORS_ORIGINS : env?.NODE_ENV !== "production";
+  server.register(cors, { origin: corsOrigin, credentials: true });
   server.register(multipart);
 
   const emailService = env?.EMAIL_API_URL && env?.EMAIL_API_SECRET
