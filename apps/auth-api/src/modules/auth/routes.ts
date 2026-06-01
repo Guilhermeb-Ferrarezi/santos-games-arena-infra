@@ -122,6 +122,10 @@ export function registerAuthRoutes(
     const passwordMatches = await verifyPassword(parsed.data.password, user.passwordHash, env);
     if (!passwordMatches) return reply.code(401).send({ error: "invalid_credentials", message: "Credenciais invalidas." });
 
+    if (user.totpEnabled && !redis) {
+      return reply.code(503).send({ error: "service_unavailable", message: "Autenticação de dois fatores indisponível. Tente novamente mais tarde." });
+    }
+
     // Se 2FA habilitado — emite token temporário em vez de sessão
     if (user.totpEnabled && redis) {
       const twoFactorToken = randomUUID();
@@ -293,7 +297,7 @@ export function registerAuthRoutes(
     const token = randomUUID();
     await redis.set(`auth:reset:${token}`, JSON.stringify({ userId: user.id }), "EX", 900);
 
-    const baseUrl = env.APP_BASE_URL?.replace(/\/$/, "") ?? "";
+    const baseUrl = env.APP_BASE_URL?.replace(/\/$/,  "") ?? "";
     const resetUrl = `${baseUrl}/reset-password?token=${token}`;
     emailService.sendPasswordReset(user.email, resetUrl).catch(() => {});
 
