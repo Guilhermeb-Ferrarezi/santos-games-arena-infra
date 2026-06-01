@@ -553,7 +553,10 @@ export function registerAuthRoutes(
       return reply.code(400).send({ error: "invalid_token", message: "Link expirado ou inválido." });
     }
 
-    await redis.del(redisKey);
+    const consumed = await redis.del(redisKey);
+    if (consumed === 0) {
+      return reply.code(400).send({ error: "invalid_token", message: "Link expirado ou inválido." });
+    }
 
     try {
       await users.updateEmail(userId, newEmail);
