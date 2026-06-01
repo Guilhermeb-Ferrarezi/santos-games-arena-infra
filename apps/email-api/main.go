@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"io/fs"
@@ -97,7 +98,7 @@ func main() {
 
 func auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Api-Key") != apiSecret {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Api-Key")), []byte(apiSecret)) != 1 {
 			writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 			return
 		}
