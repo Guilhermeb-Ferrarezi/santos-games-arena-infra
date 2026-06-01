@@ -162,14 +162,6 @@ export function registerCheckoutRoutes(
       paymentMethod: parsed.data.method
     });
 
-    if (couponRow && coupons) {
-      const claimed = await coupons.incrementUsage(couponRow.id);
-      if (!claimed) {
-        await orders.failById(order.id);
-        return reply.code(400).send({ error: "invalid_coupon", message: "Cupom inválido ou expirado." });
-      }
-    }
-
     const customer = parsed.data.customer
       ? {
           name: parsed.data.customer.name,
@@ -191,6 +183,10 @@ export function registerCheckoutRoutes(
     }
 
     await orders.updateCharge(order.id, charge.chargeId, charge.paymentLink);
+
+    if (couponRow && coupons) {
+      await coupons.incrementUsage(couponRow.id);
+    }
 
     if (parsed.data.method === "card") {
       if (parsed.data.customer && parsed.data.saveInfo) {
