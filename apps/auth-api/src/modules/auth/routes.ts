@@ -313,7 +313,13 @@ export function registerAuthRoutes(
     const raw = await redis.get(redisKey);
     if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Token inválido ou expirado." });
 
-    const { userId } = JSON.parse(raw) as { userId: number };
+    let userId: number;
+    try {
+      ({ userId } = JSON.parse(raw) as { userId: number });
+    } catch {
+      return reply.code(400).send({ error: "invalid_token", message: "Token inválido ou expirado." });
+    }
+
     const user = await users.findById(userId);
     if (!user) return reply.code(400).send({ error: "invalid_token" });
 
@@ -344,11 +350,19 @@ export function registerAuthRoutes(
     const raw = await redis.get(redisKey);
     if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Token 2FA expirado ou inválido." });
 
-    const { userId, method = "authenticator", otpHash } = JSON.parse(raw) as {
-      userId: number;
-      method?: string;
-      otpHash?: string;
-    };
+    let userId: number;
+    let method: string;
+    let otpHash: string | undefined;
+    try {
+      ({ userId, method = "authenticator", otpHash } = JSON.parse(raw) as {
+        userId: number;
+        method?: string;
+        otpHash?: string;
+      });
+    } catch {
+      return reply.code(400).send({ error: "invalid_token", message: "Token 2FA expirado ou inválido." });
+    }
+
     const user = await users.findById(userId);
     if (!user || !user.totpEnabled) {
       return reply.code(400).send({ error: "invalid_token" });
@@ -410,22 +424,28 @@ export function registerAuthRoutes(
     const [raw, ttl] = await Promise.all([redis.get(redisKey), redis.ttl(redisKey)]);
     if (!raw || ttl <= 0) return reply.code(400).send({ error: "invalid_token", message: "Token expirado." });
 
-    const parsed = JSON.parse(raw) as {
+    let parsedPayload: {
       userId: number; method?: string; otpHash?: string;
       resendCount?: number; lastResend?: number;
     };
-    if (parsed.method !== "email") return reply.code(400).send({ error: "wrong_method" });
+    try {
+      parsedPayload = JSON.parse(raw) as typeof parsedPayload;
+    } catch {
+      return reply.code(400).send({ error: "invalid_token", message: "Token expirado." });
+    }
 
-    const resendCount = parsed.resendCount ?? 0;
+    if (parsedPayload.method !== "email") return reply.code(400).send({ error: "wrong_method" });
+
+    const resendCount = parsedPayload.resendCount ?? 0;
     if (resendCount >= 3) {
       return reply.code(429).send({ error: "too_many_resends", message: "Limite de reenvios atingido." });
     }
     const now = Date.now();
-    if (parsed.lastResend && (now - parsed.lastResend) < 30_000) {
+    if (parsedPayload.lastResend && (now - parsedPayload.lastResend) < 30_000) {
       return reply.code(429).send({ error: "resend_too_soon", message: "Aguarde 30 segundos antes de reenviar." });
     }
 
-    const user = await users.findById(parsed.userId);
+    const user = await users.findById(parsedPayload.userId);
     if (!user) return reply.code(400).send({ error: "invalid_token" });
     if (!emailService) return reply.code(503).send({ error: "service_unavailable" });
 
@@ -433,7 +453,7 @@ export function registerAuthRoutes(
     const otpHash = hashEmailOtp(otp);
     await redis.set(
       redisKey,
-      JSON.stringify({ userId: parsed.userId, method: "email", otpHash, resendCount: resendCount + 1, lastResend: now }),
+      JSON.stringify({ userId: parsedPayload.userId, method: "email", otpHash, resendCount: resendCount + 1, lastResend: now }),
       "EX", ttl, // preserva TTL original
     );
     await redis.del(`${redisKey}:attempts`);
@@ -497,7 +517,14 @@ export function registerAuthRoutes(
     const raw = await redis.get(redisKey);
     if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Link expirado ou inválido." });
 
-    const { userId, newEmail } = JSON.parse(raw) as { userId: number; newEmail: string };
+    let userId: number;
+    let newEmail: string;
+    try {
+      ({ userId, newEmail } = JSON.parse(raw) as { userId: number; newEmail: string });
+    } catch {
+      return reply.code(400).send({ error: "invalid_token", message: "Link expirado ou inválido." });
+    }
+
     await redis.del(redisKey);
     await users.updateEmail(userId, newEmail);
 
