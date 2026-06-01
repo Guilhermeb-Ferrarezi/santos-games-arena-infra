@@ -84,7 +84,7 @@ export function registerCheckoutRoutes(
     return { customer: info };
   });
 
-  // ── Pay intent (link temporário via Redis) ────────────────────────────────
+  // ── Pay intent (link temporário via Redis) ────────────────────────────────────────────
   server.post("/pay/intent", async (request, reply) => {
     const token = request.cookies[env.AUTH_COOKIE_NAME];
     if (!token) return reply.code(401).send({ error: "unauthorized" });
@@ -161,10 +161,6 @@ export function registerCheckoutRoutes(
       paymentMethod: parsed.data.method
     });
 
-    if (couponRow && coupons) {
-      await coupons.incrementUsage(couponRow.id);
-    }
-
     const customer = parsed.data.customer
       ? {
           name: parsed.data.customer.name,
@@ -186,6 +182,10 @@ export function registerCheckoutRoutes(
     }
 
     await orders.updateCharge(order.id, charge.chargeId, charge.paymentLink);
+
+    if (couponRow && coupons) {
+      await coupons.incrementUsage(couponRow.id);
+    }
 
     if (parsed.data.method === "card") {
       if (parsed.data.customer && parsed.data.saveInfo) {
