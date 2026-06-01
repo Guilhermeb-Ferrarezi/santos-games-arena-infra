@@ -499,7 +499,14 @@ export function registerAuthRoutes(
 
     const { userId, newEmail } = JSON.parse(raw) as { userId: number; newEmail: string };
     await redis.del(redisKey);
-    await users.updateEmail(userId, newEmail);
+    try {
+      await users.updateEmail(userId, newEmail);
+    } catch (err: unknown) {
+      if ((err as { code?: string }).code === "23505") {
+        return reply.code(409).send({ error: "email_taken", message: "Este e-mail já está em uso." });
+      }
+      throw err;
+    }
 
     return { success: true, newEmail };
   });
