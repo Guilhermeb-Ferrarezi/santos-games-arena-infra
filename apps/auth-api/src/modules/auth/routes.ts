@@ -325,6 +325,9 @@ export function registerAuthRoutes(
     const raw = await redis.get(redisKey);
     if (!raw) return reply.code(400).send({ error: "invalid_token", message: "Token inválido ou expirado." });
 
+    const consumed = await redis.del(redisKey);
+    if (consumed === 0) return reply.code(400).send({ error: "invalid_token", message: "Token inválido ou expirado." });
+
     let userId: number;
     try {
       ({ userId } = JSON.parse(raw) as { userId: number });
@@ -335,7 +338,6 @@ export function registerAuthRoutes(
     const user = await users.findById(userId);
     if (!user) return reply.code(400).send({ error: "invalid_token" });
 
-    await redis.del(redisKey);
     const passwordHash = await createPasswordHash(parsed.data.password);
     await users.updatePassword(userId, passwordHash);
 
