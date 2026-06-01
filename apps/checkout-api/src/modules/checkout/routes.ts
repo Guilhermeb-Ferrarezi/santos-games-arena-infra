@@ -104,6 +104,9 @@ export function registerCheckoutRoutes(
     return reply.code(201).send({ token: intentToken });
   });
 
+  // GET /pay/intent/:token — pre-populates the checkout page with product info.
+  // This is intentionally idempotent: the token expires via Redis TTL, so
+  // repeated reads (prefetchers, page refreshes) do not invalidate the intent.
   server.get("/pay/intent/:token", async (request, reply) => {
     const { token } = request.params as { token: string };
     const productId = await payIntentStore.get(token);
@@ -111,8 +114,6 @@ export function registerCheckoutRoutes(
 
     const product = await products.findById(productId);
     if (!product) return reply.code(404).send({ error: "product_not_found" });
-
-    await payIntentStore.remove(token);
 
     return { product };
   });
