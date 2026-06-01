@@ -383,6 +383,7 @@ export function registerAuthRoutes(
     }
 
     let verified = false;
+    let pendingTokenConsumed = false;
     const code = parsed.data.code.replace(/-/g, "");
 
     if (method === "email") {
@@ -405,6 +406,7 @@ export function registerAuthRoutes(
         if (consumed === 0) {
           return reply.code(400).send({ error: "invalid_token", message: "Token inválido ou expirado." });
         }
+        pendingTokenConsumed = true;
         const result = verifyBackupCode(code, user.totpBackupCodes);
         if (result.valid) {
           await users.updateTotpBackupCodes(userId, result.remaining);
@@ -419,7 +421,12 @@ export function registerAuthRoutes(
       return reply.code(400).send({ error: "invalid_code", message: "Código inválido." });
     }
 
-    await redis.del(redisKey);
+    if (!pendingTokenConsumed) {
+      const consumed = await redis.del(redisKey);
+      if (consumed === 0) {
+        return reply.code(400).send({ error: "invalid_token", message: "Token 2FA expirado ou inválido." });
+      }
+    }
     await users.updateLastLogin(userId);
 
     await issueTokens({
