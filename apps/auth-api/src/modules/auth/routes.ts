@@ -369,10 +369,16 @@ export function registerAuthRoutes(
       if (/^\d{6}$/.test(code)) {
         verified = verifyTotpCode(code, user.totpSecret);
       } else if (user.totpBackupCodes) {
+        const consumed = await redis.del(redisKey);
+        if (consumed === 0) {
+          return reply.code(400).send({ error: "invalid_token", message: "Token inválido ou expirado." });
+        }
         const result = verifyBackupCode(code, user.totpBackupCodes);
         if (result.valid) {
           await users.updateTotpBackupCodes(userId, result.remaining);
           verified = true;
+        } else {
+          return reply.code(400).send({ error: "invalid_code", message: "Código inválido." });
         }
       }
     }
