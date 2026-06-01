@@ -185,7 +185,9 @@ export function registerCheckoutRoutes(
     await orders.updateCharge(order.id, charge.chargeId, charge.paymentLink);
 
     if (couponRow && coupons) {
-      await coupons.incrementUsage(couponRow.id);
+      await coupons.incrementUsage(couponRow.id).catch((err) => {
+        console.error("[checkout] failed to increment coupon usage after charge:", err);
+      });
     }
 
     if (parsed.data.method === "card") {
