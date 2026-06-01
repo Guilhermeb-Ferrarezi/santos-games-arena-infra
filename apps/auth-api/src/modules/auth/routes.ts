@@ -286,7 +286,9 @@ export function registerAuthRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
 
     const user = await users.findByIdentifier(parsed.data.email).catch(() => null);
-    if (!user) return reply.code(404).send({ error: "email_not_found", message: "Nenhuma conta encontrada com este e-mail." });
+    // Always return success to prevent user enumeration: attackers must not
+    // be able to determine whether an email address is registered.
+    if (!user) return reply.code(200).send({ success: true });
 
     if (!emailService || !redis) return reply.code(503).send({ error: "service_unavailable" });
 
