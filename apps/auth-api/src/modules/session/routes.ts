@@ -194,6 +194,9 @@ export function registerSessionRoutes(
       if (!session) {
         return reply.code(401).send({ error: "unauthorized" });
       }
+      if (sessions && (!session.sessionId || !(await sessions.exists(session.sessionId)))) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
 
       const list = await refreshTokens.listByUser(session.userId);
       const currentRefresh = request.cookies[REFRESH_COOKIE_NAME];
@@ -219,6 +222,9 @@ export function registerSessionRoutes(
       if (!session) {
         return reply.code(401).send({ error: "unauthorized" });
       }
+      if (sessions && (!session.sessionId || !(await sessions.exists(session.sessionId)))) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
 
       const id = Number((request.params as { id: string }).id);
       if (!Number.isFinite(id)) {
@@ -233,6 +239,9 @@ export function registerSessionRoutes(
       const accessToken = request.cookies[env.AUTH_COOKIE_NAME];
       const session = accessToken ? await verifySessionToken(accessToken, env) : null;
       if (!session) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+      if (sessions && (!session.sessionId || !(await sessions.exists(session.sessionId)))) {
         return reply.code(401).send({ error: "unauthorized" });
       }
 
@@ -250,6 +259,9 @@ export function registerSessionRoutes(
       const accessToken = request.cookies[env.AUTH_COOKIE_NAME];
       const session = accessToken ? await verifySessionToken(accessToken, env) : null;
       if (!session) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+      if (sessions && (!session.sessionId || !(await sessions.exists(session.sessionId)))) {
         return reply.code(401).send({ error: "unauthorized" });
       }
 
