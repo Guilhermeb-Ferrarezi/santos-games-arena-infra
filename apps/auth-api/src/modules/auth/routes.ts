@@ -457,6 +457,10 @@ export function registerAuthRoutes(
     const session = await verifySessionToken(token, env);
     if (!session) return reply.code(401).send({ error: "unauthorized" });
 
+    if (sessions && (!session.sessionId || !(await sessions.exists(session.sessionId)))) {
+      return reply.code(401).send({ error: "unauthorized", message: "Sessao invalida." });
+    }
+
     const user = await users.findById(session.userId);
     if (!user) return reply.code(401).send({ error: "unauthorized" });
 
