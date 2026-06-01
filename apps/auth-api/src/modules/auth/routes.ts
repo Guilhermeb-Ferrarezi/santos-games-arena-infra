@@ -213,7 +213,15 @@ export function registerAuthRoutes(
     }
 
     const passwordHash = await createPasswordHash(parsed.data.password);
-    const user = await users.createUser({ email: normalizedEmail, login: normalizedLogin, passwordHash });
+    let user;
+    try {
+      user = await users.createUser({ email: normalizedEmail, login: normalizedLogin, passwordHash });
+    } catch (err: unknown) {
+      if ((err as { code?: string }).code === "23505") {
+        return reply.code(409).send({ error: "user_exists", message: "Ja existe uma conta com este email ou login." });
+      }
+      throw err;
+    }
 
     const provider = parsed.data.provider as OAuthProvider | undefined;
     if (provider && parsed.data.externalAccountId && externalAccounts) {
