@@ -162,7 +162,11 @@ export function registerCheckoutRoutes(
     });
 
     if (couponRow && coupons) {
-      await coupons.incrementUsage(couponRow.id);
+      const claimed = await coupons.incrementUsage(couponRow.id);
+      if (!claimed) {
+        await orders.failById(order.id);
+        return reply.code(400).send({ error: "invalid_coupon", message: "Cupom inválido ou expirado." });
+      }
     }
 
     const customer = parsed.data.customer
