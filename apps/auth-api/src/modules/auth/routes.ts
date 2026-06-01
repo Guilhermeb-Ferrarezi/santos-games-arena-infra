@@ -367,6 +367,10 @@ export function registerAuthRoutes(
     } else {
       if (!user.totpSecret) return reply.code(400).send({ error: "invalid_token" });
       if (/^\d{6}$/.test(code)) {
+        const status = await consumeOtpAttempt(redis, redisKey);
+        if (status === "locked") {
+          return reply.code(429).send({ error: "too_many_attempts", message: "Muitas tentativas. Faça login novamente." });
+        }
         verified = verifyTotpCode(code, user.totpSecret);
       } else if (user.totpBackupCodes) {
         const result = verifyBackupCode(code, user.totpBackupCodes);
