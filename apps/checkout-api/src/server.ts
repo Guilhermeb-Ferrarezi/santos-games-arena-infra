@@ -115,6 +115,8 @@ export function createCheckoutApiServer(options: CheckoutApiServerOptions = {}) 
             DOTFY_WEBHOOK_SECRET: env.DOTFY_WEBHOOK_SECRET!,
             CORUJAO_API_URL: env.CORUJAO_API_URL,
             CORUJAO_INTERNAL_SECRET: env.CORUJAO_INTERNAL_SECRET,
+            MIX_API_URL: env.MIX_API_URL,
+            MIX_INTERNAL_SECRET: env.MIX_INTERNAL_SECRET,
             RESEND_FROM: env.RESEND_FROM
           },
           orders,
