@@ -6,6 +6,8 @@ import type { OrderRepository } from "../checkout/order-repository";
 import type { ProductRepository } from "../checkout/product-repository";
 import { sendPaymentConfirmation } from "../email/send-payment-confirmation";
 
+const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300;
+
 function verifyDotfySignature(rawBody: Buffer, signatureHeader: string, secret: string): boolean {
   const parts = Object.fromEntries(
     signatureHeader.split(",").map((p) => {
@@ -17,6 +19,12 @@ function verifyDotfySignature(rawBody: Buffer, signatureHeader: string, secret: 
   const timestamp = parts.t;
   const v1 = parts.v1;
   if (!timestamp || !v1) return false;
+
+  // Reject replayed webhooks: timestamp must be within tolerance window
+  const tsSeconds = parseInt(timestamp, 10);
+  if (isNaN(tsSeconds) || Math.abs(Date.now() / 1000 - tsSeconds) > WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) {
+    return false;
+  }
 
   const payload = `${timestamp}.${rawBody.toString()}`;
   const expected = crypto.createHmac("sha256", secret).update(payload).digest("hex");
