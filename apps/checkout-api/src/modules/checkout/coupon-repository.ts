@@ -26,12 +26,15 @@ export function createCouponRepository(client: PostgresClient) {
     return row ?? null;
   }
 
-  async function incrementUsage(id: number): Promise<void> {
-    await client`
+  async function incrementUsage(id: number): Promise<boolean> {
+    const result = await client<{ id: number }[]>`
       UPDATE checkout_coupons
       SET used_count = used_count + 1, updated_at = NOW()
       WHERE id = ${id}
+        AND (max_uses IS NULL OR used_count < max_uses)
+      RETURNING id
     `;
+    return result.length > 0;
   }
 
   return { findActiveByCode, incrementUsage };
