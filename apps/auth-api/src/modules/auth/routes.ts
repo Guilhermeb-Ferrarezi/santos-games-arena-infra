@@ -285,15 +285,15 @@ export function registerAuthRoutes(
     const parsed = z.object({ email: z.string().trim().email() }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
 
+    if (!emailService || !redis) return reply.code(503).send({ error: "service_unavailable" });
+
     const user = await users.findByIdentifier(parsed.data.email).catch(() => null);
     if (!user) return reply.code(200).send({ success: true });
-
-    if (!emailService || !redis) return reply.code(503).send({ error: "service_unavailable" });
 
     const token = randomUUID();
     await redis.set(`auth:reset:${token}`, JSON.stringify({ userId: user.id }), "EX", 900);
 
-    const baseUrl = env.APP_BASE_URL?.replace(/\/$/,  "") ?? "";
+    const baseUrl = env.APP_BASE_URL?.replace(/\/$/, "") ?? "";
     const resetUrl = `${baseUrl}/reset-password?token=${token}`;
     emailService.sendPasswordReset(user.email, resetUrl).catch(() => {});
 
