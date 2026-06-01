@@ -317,9 +317,9 @@ export function registerAuthRoutes(
     const user = await users.findById(userId);
     if (!user) return reply.code(400).send({ error: "invalid_token" });
 
+    await redis.del(redisKey);
     const passwordHash = await createPasswordHash(parsed.data.password);
     await users.updatePassword(userId, passwordHash);
-    await redis.del(redisKey);
 
     // Revoga todos os refresh tokens — session tokens no Redis expiram naturalmente
     if (refreshTokens) await refreshTokens.revokeAll(userId).catch(() => {});
